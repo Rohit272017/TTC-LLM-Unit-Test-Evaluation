@@ -1,9 +1,0 @@
-cff-version: 1.2.0
-title: TTC-LLM-Unit-Test-Evaluation
-message: "If you use this repository, please cite the accompanying thesis."
-authors:
-  - family-names: Chhabra
-    given-names: Rohit
-title: "A Metric-Based Evaluation of Testing Technique Awareness in LLM-Generated C++ Unit Tests"
-version: 1.0.0
-date-released: 2026-06-30
