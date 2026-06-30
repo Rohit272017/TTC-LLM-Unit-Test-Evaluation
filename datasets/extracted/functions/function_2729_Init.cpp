@@ -1,0 +1,84 @@
+#include "tensorstore/internal/compression/zlib.h"
+#include "absl/base/optimization.h"
+#include "absl/log/absl_check.h"
+#include "absl/status/status.h"
+#include "tensorstore/internal/compression/cord_stream_manager.h"
+#include <zlib.h>
+namespace tensorstore {
+namespace zlib {
+namespace {
+struct InflateOp {
+  static int Init(z_stream* s, [[maybe_unused]] int level, int header_option) {
+    return inflateInit2(s, 15 
+                               + header_option);
+  }
+  static int Process(z_stream* s, int flags) { return inflate(s, flags); }
+  static int Destroy(z_stream* s) { return inflateEnd(s); }
+  static constexpr bool kDataErrorPossible = true;
+};
+struct DeflateOp {
+  static int Init(z_stream* s, int level, int header_option) {
+    return deflateInit2(s, level, Z_DEFLATED,
+                        15 
+                            + header_option,
+                        8 ,
+                        Z_DEFAULT_STRATEGY);
+  }
+  static int Process(z_stream* s, int flags) { return deflate(s, flags); }
+  static int Destroy(z_stream* s) { return deflateEnd(s); }
+  static constexpr bool kDataErrorPossible = false;
+};
+template <typename Op>
+absl::Status ProcessZlib(const absl::Cord& input, absl::Cord* output, int level,
+                         bool use_gzip_header) {
+  z_stream s = {};
+  internal::CordStreamManager<z_stream, 16 * 1024>
+      stream_manager(s, input, output);
+  const int header_option = use_gzip_header ? 16 
+                                            : 0;
+  int err = Op::Init(&s, level, header_option);
+  if (err != Z_OK) {
+    ABSL_CHECK(false);
+  }
+  struct StreamDestroyer {
+    z_stream* s;
+    ~StreamDestroyer() { Op::Destroy(s); }
+  } stream_destroyer{&s};
+  while (true) {
+    const bool input_complete = stream_manager.FeedInputAndOutputBuffers();
+    err = Op::Process(&s, input_complete ? Z_FINISH : Z_NO_FLUSH);
+    const bool made_progress = stream_manager.HandleOutput();
+    if (err == Z_OK) continue;
+    if (err == Z_BUF_ERROR && made_progress) continue;
+    break;
+  }
+  switch (err) {
+    case Z_STREAM_END:
+      if (!stream_manager.has_input_remaining()) {
+        return absl::OkStatus();
+      }
+      [[fallthrough]];
+    case Z_NEED_DICT:
+    case Z_DATA_ERROR:
+    case Z_BUF_ERROR:
+      if (!Op::kDataErrorPossible) {
+        ABSL_CHECK(false);
+      }
+      return absl::InvalidArgumentError("Error decoding zlib-compressed data");
+    default:
+      ABSL_CHECK(false);
+  }
+  ABSL_UNREACHABLE();  
+}
+}  
+void Encode(const absl::Cord& input, absl::Cord* output,
+            const Options& options) {
+  ProcessZlib<DeflateOp>(input, output, options.level, options.use_gzip_header)
+      .IgnoreError();
+}
+absl::Status Decode(const absl::Cord& input, absl::Cord* output,
+                    bool use_gzip_header) {
+  return ProcessZlib<InflateOp>(input, output, 0, use_gzip_header);
+}
+}  
+}  

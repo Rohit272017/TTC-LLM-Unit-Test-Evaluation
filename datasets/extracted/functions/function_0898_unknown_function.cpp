@@ -1,0 +1,21 @@
+#ifndef ABSL_BASE_NULLABILITY_H_
+#define ABSL_BASE_NULLABILITY_H_
+#include "absl/base/config.h"
+#include "absl/base/internal/nullability_impl.h"
+#define ABSL_POINTERS_DEFAULT_NONNULL
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+template <typename T>
+using Nonnull = nullability_internal::NonnullImpl<T>;
+template <typename T>
+using Nullable = nullability_internal::NullableImpl<T>;
+template <typename T>
+using NullabilityUnknown = nullability_internal::NullabilityUnknownImpl<T>;
+ABSL_NAMESPACE_END
+}  
+#if ABSL_HAVE_FEATURE(nullability_on_classes)
+#define ABSL_NULLABILITY_COMPATIBLE _Nullable
+#else
+#define ABSL_NULLABILITY_COMPATIBLE
+#endif
+#endif  

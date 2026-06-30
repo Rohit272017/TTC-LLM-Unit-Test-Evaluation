@@ -1,0 +1,5245 @@
+function_id,function_name,function_file,prompt
+function_0347,Hash,datasets/extracted/functions/function_0347_Hash.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""util/hash.h""
+#include <cstring>
+#include ""util/coding.h""
+#ifndef FALLTHROUGH_INTENDED
+#define FALLTHROUGH_INTENDED \
+  do {                       \
+  } while (0)
+#endif
+namespace leveldb {
+uint32_t Hash(const char* data, size_t n, uint32_t seed) {
+  const uint32_t m = 0xc6a4a793;
+  const uint32_t r = 24;
+  const char* limit = data + n;
+  uint32_t h = seed ^ (n * m);
+  while (data + 4 <= limit) {
+    uint32_t w = DecodeFixed32(data);
+    data += 4;
+    h += w;
+    h *= m;
+    h ^= (h >> 16);
+  }
+  switch (limit - data) {
+    case 3:
+      h += static_cast<uint8_t>(data[2]) << 16;
+      FALLTHROUGH_INTENDED;
+    case 2:
+      h += static_cast<uint8_t>(data[1]) << 8;
+      FALLTHROUGH_INTENDED;
+    case 1:
+      h += static_cast<uint8_t>(data[0]);
+      h *= m;
+      h ^= (h >> r);
+      break;
+  }
+  return h;
+}
+}  
+
+Return only Google Test code.
+"
+function_1887,BuildMessage,datasets/extracted/functions/function_1887_BuildMessage.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/c/logging.h""
+#include ""tensorflow/core/platform/logging.h""
+#include ""tensorflow/core/platform/stringprintf.h""
+static ::tensorflow::string BuildMessage(const char* fmt, va_list args) {
+  ::tensorflow::string message;
+  ::tensorflow::strings::Appendv(&message, fmt, args);
+  return message;
+}
+void TF_Log(TF_LogLevel level, const char* fmt, ...) {
+  if (level < TF_INFO || level > TF_FATAL) return;
+  va_list args;
+  va_start(args, fmt);
+  auto message = BuildMessage(fmt, args);
+  va_end(args);
+  switch (level) {
+    case TF_INFO:
+      LOG(INFO) << message;
+      break;
+    case TF_WARNING:
+      LOG(WARNING) << message;
+      break;
+    case TF_ERROR:
+      LOG(ERROR) << message;
+      break;
+    case TF_FATAL:
+      LOG(FATAL) << message;
+      break;
+  }
+}
+void TF_VLog(int level, const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  auto message = BuildMessage(fmt, args);
+  va_end(args);
+  VLOG(level) << message;
+}
+void TF_DVLog(int level, const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  auto message = BuildMessage(fmt, args);
+  va_end(args);
+  DVLOG(level) << message;
+}
+
+Return only Google Test code.
+"
+function_1342,CASE_4,datasets/extracted/functions/function_1342_CASE_4.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#ifndef AROLLA_UTIL_SWITCH_INDEX_H_
+#define AROLLA_UTIL_SWITCH_INDEX_H_
+#include <cassert>
+#include <type_traits>
+#include <utility>
+#include ""absl/base/attributes.h""
+namespace arolla {
+#define CASE_1(k) \
+  case (k):       \
+    return std::forward<Callback>(callback)(std::integral_constant<int, (k)>())
+#define CASE_4(k) \
+  CASE_1(k);      \
+  CASE_1(k + 1);  \
+  CASE_1(k + 2);  \
+  CASE_1(k + 3)
+#define CASE_16(k) \
+  CASE_4(k);       \
+  CASE_4(k + 4);   \
+  CASE_4(k + 8);   \
+  CASE_4(k + 12)
+template <typename Callback>
+auto switch_index_32(int n, Callback&& callback) {
+  assert(0 <= n && n < 32);
+  switch (n) {
+    CASE_16(0);
+    CASE_16(16);
+  }
+  return std::forward<Callback>(callback)(std::integral_constant<int, 31>());
+}
+template <typename Callback>
+auto switch_index_64(int n, Callback&& callback) {
+  assert(0 <= n && n < 64);
+  switch (n) {
+    CASE_16(0);
+    CASE_16(16);
+    CASE_16(32);
+    CASE_16(48);
+  }
+  return std::forward<Callback>(callback)(std::integral_constant<int, 63>());
+}
+template <int N, typename Callback>
+inline ABSL_ATTRIBUTE_ALWAYS_INLINE auto switch_index(int n,
+                                                      Callback&& callback) {
+  static_assert(N == 32 || N == 64);
+  if constexpr (N == 32) {
+    return switch_index_32(n, std::forward<Callback>(callback));
+  } else {
+    return switch_index_64(n, std::forward<Callback>(callback));
+  }
+}
+#undef CASE_16
+#undef CASE_4
+#undef CASE_1
+}  
+#endif  
+
+Return only Google Test code.
+"
+function_0704,FNMatch,datasets/extracted/functions/function_0704_FNMatch.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""absl/log/internal/fnmatch.h""
+#include <cstddef>
+#include ""absl/base/config.h""
+#include ""absl/strings/string_view.h""
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace log_internal {
+bool FNMatch(absl::string_view pattern, absl::string_view str) {
+  bool in_wildcard_match = false;
+  while (true) {
+    if (pattern.empty()) {
+      return in_wildcard_match || str.empty();
+    }
+    if (str.empty()) {
+      return pattern.find_first_not_of('*') == pattern.npos;
+    }
+    switch (pattern.front()) {
+      case '*':
+        pattern.remove_prefix(1);
+        in_wildcard_match = true;
+        break;
+      case '?':
+        pattern.remove_prefix(1);
+        str.remove_prefix(1);
+        break;
+      default:
+        if (in_wildcard_match) {
+          absl::string_view fixed_portion = pattern;
+          const size_t end = fixed_portion.find_first_of(""*?"");
+          if (end != fixed_portion.npos) {
+            fixed_portion = fixed_portion.substr(0, end);
+          }
+          const size_t match = str.find(fixed_portion);
+          if (match == str.npos) {
+            return false;
+          }
+          pattern.remove_prefix(fixed_portion.size());
+          str.remove_prefix(match + fixed_portion.size());
+          in_wildcard_match = false;
+        } else {
+          if (pattern.front() != str.front()) {
+            return false;
+          }
+          pattern.remove_prefix(1);
+          str.remove_prefix(1);
+        }
+        break;
+    }
+  }
+}
+}  
+ABSL_NAMESPACE_END
+}  
+
+Return only Google Test code.
+"
+function_1041,IsValidMetricName,datasets/extracted/functions/function_1041_IsValidMetricName.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorstore/internal/metrics/metadata.h""
+#include <cstddef>
+#include <string_view>
+#include ""absl/base/optimization.h""
+#include ""absl/strings/ascii.h""
+namespace tensorstore {
+namespace internal_metrics {
+bool IsValidMetricName(std::string_view name) {
+  if (name.size() < 2) return false;
+  if (name[0] != '/') return false;
+  if (name[name.size() - 1] == '/') return false;
+  if (!absl::ascii_isalpha(name[1])) return false;
+  size_t last_slash = 0;
+  for (size_t i = 1; i < name.size(); i++) {
+    const auto ch = name[i];
+    if (ch == '/') {
+      if (i - last_slash == 1) return false;
+      if (i - last_slash > 63) return false;
+      last_slash = i;
+    } else if (ch != '_' && !absl::ascii_isalnum(ch)) {
+      return false;
+    }
+  }
+  return true;
+}
+bool IsValidMetricLabel(std::string_view name) {
+  if (name.empty()) return false;
+  if (!absl::ascii_isalpha(name[0])) return false;
+  for (auto ch : name) {
+    if (ch != '_' && !absl::ascii_isalnum(ch)) {
+      return false;
+    }
+  }
+  return true;
+}
+std::string_view UnitsToString(Units units) {
+  switch (units) {
+    case Units::kUnknown:
+      return {};
+    case Units::kSeconds:
+      return ""seconds"";
+    case Units::kMilliseconds:
+      return ""milliseconds"";
+    case Units::kMicroseconds:
+      return ""microseconds"";
+    case Units::kNanoseconds:
+      return ""nanoseconds"";
+    case Units::kBits:
+      return ""bits"";
+    case Units::kBytes:
+      return ""bytes"";
+    case Units::kKilobytes:
+      return ""kilobytes"";
+    case Units::kMegabytes:
+      return ""megabytes"";
+  }
+  ABSL_UNREACHABLE();
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_0060,BrainPadding2EigenPadding,datasets/extracted/functions/function_0060_BrainPadding2EigenPadding.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include <algorithm>
+#include <cmath>
+#include ""tensorflow/core/framework/attr_value.pb.h""
+#include ""tensorflow/core/framework/ops_util.h""
+#include ""tensorflow/core/lib/core/errors.h""
+#include ""tensorflow/core/lib/strings/str_util.h""
+#include ""tensorflow/core/util/padding.h""
+namespace tensorflow {
+Eigen::PaddingType BrainPadding2EigenPadding(Padding padding) {
+  switch (padding) {
+    case Padding::VALID:
+      return Eigen::PADDING_VALID;
+    case Padding::SAME:
+      return Eigen::PADDING_SAME;
+    case Padding::EXPLICIT:
+      LOG(FATAL) << ""Eigen does not have explicit padding enum ""  
+                    ""value"";
+  }
+  return Eigen::PADDING_SAME;  
+}
+Status GetBroadcastSize(const int index, const int in_size, const int ksize,
+                        const int stride, const int pad_size, int* bindex,
+                        int* bsize) {
+  if (index * stride > in_size) {
+    return errors::InvalidArgument(
+        ""index * stride must be less than or equal to input size"");
+  }
+  *bindex = index * stride;
+  *bsize = ksize;
+  if (*bindex < pad_size) {
+    *bsize = ksize + *bindex - pad_size;
+    *bindex = 0;
+  } else {
+    *bindex -= pad_size;
+  }
+  if (*bindex + ksize > in_size) {
+    *bsize = std::min((in_size - *bindex), ksize);
+  }
+  return absl::OkStatus();
+}
+string SanitizeThreadSuffix(string suffix) {
+  string clean;
+  for (int i = 0; i < suffix.size(); ++i) {
+    const char ch = suffix[i];
+    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+        (ch >= '0' && ch <= '9') || ch == '_' || ch == '-') {
+      clean += ch;
+    } else {
+      clean += '_';
+    }
+  }
+  return clean;
+}
+}  
+
+Return only Google Test code.
+"
+function_2701,ScopedActivateContext,datasets/extracted/functions/function_2701_ScopedActivateContext.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/stream_executor/gpu/scoped_activate_context.h""
+#include ""absl/log/check.h""
+#include ""xla/stream_executor/gpu/context.h""
+#include ""xla/stream_executor/gpu/gpu_executor.h""
+#include ""xla/stream_executor/stream_executor.h""
+#include ""tsl/platform/logging.h""
+namespace stream_executor::gpu {
+namespace {
+thread_local struct ThreadLocalData {
+  Context* context;
+  int device_ordinal;
+  int depth;
+} tls_data = {};
+}  
+ScopedActivateContext::ScopedActivateContext(GpuExecutor* gpu_executor)
+    : ScopedActivateContext(gpu_executor->gpu_context()) {}
+ScopedActivateContext::ScopedActivateContext(StreamExecutor* executor)
+    : ScopedActivateContext(ExtractGpuExecutor(executor)) {}
+ScopedActivateContext::ScopedActivateContext(gpu::Context* gpu_context) {
+  auto* tls = &tls_data;
+  if (tls->depth == 0) {
+    VLOG(3) << ""ScopedActivateContext switching to ""
+            << gpu_context->device_ordinal();
+    gpu_context->SetActive();
+    tls->depth = 1;
+    tls->device_ordinal = gpu_context->device_ordinal();
+    tls->context = gpu_context;
+    to_restore_ = nullptr;
+    return;
+  }
+  tls->depth++;
+  if (tls->device_ordinal == gpu_context->device_ordinal()) {
+    DCHECK(gpu_context->IsActive());
+    return;
+  }
+  VLOG(3) << ""ScopedActivateContext switching context from ""
+          << tls->device_ordinal << "" to "" << gpu_context->device_ordinal();
+  to_restore_ = tls->context;
+  gpu_context->SetActive();
+  tls->device_ordinal = gpu_context->device_ordinal();
+  tls->context = gpu_context;
+}
+ScopedActivateContext::~ScopedActivateContext() {
+  auto* tls = &tls_data;
+  tls->depth--;
+  DCHECK_GE(tls->depth, 0);
+  if (to_restore_ == nullptr) {
+    return;
+  }
+  to_restore_->SetActive();
+  tls->device_ordinal = to_restore_->device_ordinal();
+  tls->context = to_restore_;
+}
+}  
+
+Return only Google Test code.
+"
+function_0751,NgHttp2Session,datasets/extracted/functions/function_0751_NgHttp2Session.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""quiche/http2/adapter/nghttp2_session.h""
+#include ""quiche/common/platform/api/quiche_logging.h""
+namespace http2 {
+namespace adapter {
+NgHttp2Session::NgHttp2Session(Perspective perspective,
+                               nghttp2_session_callbacks_unique_ptr callbacks,
+                               const nghttp2_option* options, void* userdata)
+    : session_(MakeSessionPtr(nullptr)), perspective_(perspective) {
+  nghttp2_session* session;
+  switch (perspective_) {
+    case Perspective::kClient:
+      nghttp2_session_client_new2(&session, callbacks.get(), userdata, options);
+      break;
+    case Perspective::kServer:
+      nghttp2_session_server_new2(&session, callbacks.get(), userdata, options);
+      break;
+  }
+  session_ = MakeSessionPtr(session);
+}
+NgHttp2Session::~NgHttp2Session() {
+  const bool pending_reads = nghttp2_session_want_read(session_.get()) != 0;
+  const bool pending_writes = nghttp2_session_want_write(session_.get()) != 0;
+  if (pending_reads || pending_writes) {
+    QUICHE_VLOG(1) << ""Shutting down connection with pending reads: ""
+                   << pending_reads << "" or pending writes: "" << pending_writes;
+  }
+}
+int64_t NgHttp2Session::ProcessBytes(absl::string_view bytes) {
+  return nghttp2_session_mem_recv(
+      session_.get(), reinterpret_cast<const uint8_t*>(bytes.data()),
+      bytes.size());
+}
+int NgHttp2Session::Consume(Http2StreamId stream_id, size_t num_bytes) {
+  return nghttp2_session_consume(session_.get(), stream_id, num_bytes);
+}
+bool NgHttp2Session::want_read() const {
+  return nghttp2_session_want_read(session_.get()) != 0;
+}
+bool NgHttp2Session::want_write() const {
+  return nghttp2_session_want_write(session_.get()) != 0;
+}
+int NgHttp2Session::GetRemoteWindowSize() const {
+  return nghttp2_session_get_remote_window_size(session_.get());
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_2476,Display,datasets/extracted/functions/function_2476_Display.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/core/profiler/internal/tfprof_tensor.h""
+#include <vector>
+#include ""absl/strings/str_cat.h""
+#include ""absl/strings/str_format.h""
+namespace tensorflow {
+namespace tfprof {
+void TFProfTensor::Display(string* formatted_str,
+                           TFProfTensorProto* tfprof_tensor_pb) {
+  if (formatted_str) {
+    if (formatted_str_.length() >= kTFProfTenosrMaxDisplayLen) {
+      *formatted_str =
+          absl::StrCat(formatted_str_, ""...omitted from display\n\n"");
+    } else {
+      *formatted_str = formatted_str_;
+    }
+  }
+  if (tfprof_tensor_pb) {
+    tfprof_tensor_pb->MergeFrom(tfprof_tensor_pb_);
+  }
+}
+void TFProfTensor::Build() {
+  tfprof_tensor_pb_.set_dtype(tensor_->dtype());
+  switch (tensor_->dtype()) {
+    case DataType::DT_FLOAT:
+    case DataType::DT_DOUBLE: {
+      std::vector<double> values_vec;
+      if (tensor_->dtype() == DataType::DT_FLOAT) {
+        GetValueVec<float, double>(&values_vec);
+      } else if (tensor_->dtype() == DataType::DT_DOUBLE) {
+        GetValueVec<double, double>(&values_vec);
+      }
+      BuildOutput<double>(0, 0, values_vec, &tfprof_tensor_pb_);
+      break;
+    }
+    case DataType::DT_INT32:
+    case DataType::DT_INT64: {
+      std::vector<int64_t> values_vec;
+      if (tensor_->dtype() == DataType::DT_INT32) {
+        GetValueVec<int32, int64_t>(&values_vec);
+      } else if (tensor_->dtype() == DataType::DT_INT64) {
+        GetValueVec<int64_t, int64_t>(&values_vec);
+      }
+      BuildOutput<int64_t>(0, 0, values_vec, &tfprof_tensor_pb_);
+      break;
+    }
+    case DataType::DT_STRING: {
+      std::vector<tstring> values_vec;
+      GetValueVec<tstring, tstring>(&values_vec);
+      BuildOutput<tstring>(0, 0, values_vec, &tfprof_tensor_pb_);
+      break;
+    }
+    default: {
+      absl::FPrintF(stderr, ""Not Supported type %d\n"", tensor_->dtype());
+      break;
+    }
+  }
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_0392,Run,datasets/extracted/functions/function_0392_Run.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/service/collectives_schedule_linearizer.h""
+#include <algorithm>
+#include <list>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+#include ""absl/container/flat_hash_map.h""
+#include ""absl/container/flat_hash_set.h""
+#include ""xla/hlo/ir/hlo_casting_utils.h""
+#include ""xla/hlo/ir/hlo_instruction.h""
+#include ""xla/hlo/ir/hlo_instructions.h""
+#include ""xla/hlo/ir/hlo_opcode.h""
+#include ""xla/hlo/ir/hlo_reachability.h""
+#include ""tsl/platform/errors.h""
+namespace xla {
+absl::StatusOr<bool> CollectivesScheduleLinearizer::Run(
+    HloModule* module,
+    const absl::flat_hash_set<absl::string_view>& execution_threads) {
+  if (is_enabled_ && !is_enabled_(module)) {
+    return false;
+  }
+  bool changed = false;
+  for (HloComputation* computation :
+       module->MakeNonfusionComputations(execution_threads)) {
+    std::unique_ptr<HloReachabilityMap> reachability;
+    HloInstruction* prev_done = nullptr;
+    for (HloInstruction* inst : computation->MakeInstructionPostOrder()) {
+      auto* next = DynCast<HloCollectiveInstruction>(inst);
+      if (!next) {
+        continue;
+      }
+      if (!reachability) {
+        reachability = HloReachabilityMap::Build(computation);
+      }
+      HloInstruction* start = next;
+      HloInstruction* done = next;
+      switch (next->opcode()) {
+        case HloOpcode::kAllReduceStart:
+        case HloOpcode::kAllGatherStart:
+        case HloOpcode::kCollectivePermuteStart:
+        case HloOpcode::kAsyncStart:
+          CHECK_EQ(start->user_count(), 1);
+          done = start->users()[0];
+          break;
+        default:
+          break;
+      }
+      if (prev_done && !reachability->IsConnected(start, prev_done)) {
+        TF_RETURN_IF_ERROR(prev_done->AddControlDependencyTo(next));
+        VLOG(1) << ""Adding control dependency from "" << prev_done->ToString()
+                << "" to "" << start->ToString();
+        changed = true;
+      }
+      prev_done = done;
+    }
+  }
+  return changed;
+}
+}  
+
+Return only Google Test code.
+"
+function_2439,Tokenize,datasets/extracted/functions/function_2439_Tokenize.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/lite/testing/tokenize.h""
+#include <istream>
+#include <string>
+#include ""tensorflow/lite/string_type.h""
+namespace tflite {
+namespace testing {
+void Tokenize(std::istream* input, TokenProcessor* processor) {
+  enum State { kBuildQuotedToken, kBuildToken, kIdle };
+  std::string current_token;
+  State state = kIdle;
+  auto start_token = [&](char c) {
+    state = kBuildToken;
+    current_token.clear();
+    current_token = c;
+  };
+  auto issue_token = [&]() {
+    state = kIdle;
+    processor->ConsumeToken(&current_token);
+    current_token.clear();
+  };
+  auto start_quoted_token = [&]() {
+    state = kBuildQuotedToken;
+    current_token.clear();
+  };
+  auto issue_quoted_token = [&]() {
+    state = kIdle;
+    processor->ConsumeToken(&current_token);
+    current_token.clear();
+  };
+  auto issue_delim = [&](char d) {
+    current_token = string(1, d);
+    processor->ConsumeToken(&current_token);
+    current_token.clear();
+  };
+  auto is_delim = [](char c) { return c == '{' || c == '}' || c == ':'; };
+  auto is_quote = [](char c) { return c == '""'; };
+  for (auto it = std::istreambuf_iterator<char>(*input);
+       it != std::istreambuf_iterator<char>(); ++it) {
+    switch (state) {
+      case kIdle:
+        if (is_delim(*it)) {
+          issue_delim(*it);
+        } else if (is_quote(*it)) {
+          start_quoted_token();
+        } else if (!isspace(*it)) {
+          start_token(*it);
+        }
+        break;
+      case kBuildToken:
+        if (is_delim(*it)) {
+          issue_token();
+          issue_delim(*it);
+        } else if (is_quote(*it)) {
+          issue_token();
+          start_quoted_token();
+        } else if (isspace(*it)) {
+          issue_token();
+        } else {
+          current_token += *it;
+        }
+        break;
+      case kBuildQuotedToken:
+        if (is_quote(*it)) {
+          issue_quoted_token();
+        } else {
+          current_token += *it;
+        }
+        break;
+    }
+  }
+  if (state != kIdle) {
+    issue_token();
+  }
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_3389,RuntimeImplFromBuilder,datasets/extracted/functions/function_3389_RuntimeImplFromBuilder.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""runtime/reference_resolver.h""
+#include ""absl/base/macros.h""
+#include ""absl/log/absl_log.h""
+#include ""absl/status/status.h""
+#include ""absl/status/statusor.h""
+#include ""common/native_type.h""
+#include ""eval/compiler/qualified_reference_resolver.h""
+#include ""internal/casts.h""
+#include ""internal/status_macros.h""
+#include ""runtime/internal/runtime_friend_access.h""
+#include ""runtime/internal/runtime_impl.h""
+#include ""runtime/runtime.h""
+#include ""runtime/runtime_builder.h""
+namespace cel {
+namespace {
+using ::cel::internal::down_cast;
+using ::cel::runtime_internal::RuntimeFriendAccess;
+using ::cel::runtime_internal::RuntimeImpl;
+absl::StatusOr<RuntimeImpl*> RuntimeImplFromBuilder(RuntimeBuilder& builder) {
+  Runtime& runtime = RuntimeFriendAccess::GetMutableRuntime(builder);
+  if (RuntimeFriendAccess::RuntimeTypeId(runtime) !=
+      NativeTypeId::For<RuntimeImpl>()) {
+    return absl::UnimplementedError(
+        ""regex precompilation only supported on the default cel::Runtime ""
+        ""implementation."");
+  }
+  RuntimeImpl& runtime_impl = down_cast<RuntimeImpl&>(runtime);
+  return &runtime_impl;
+}
+google::api::expr::runtime::ReferenceResolverOption Convert(
+    ReferenceResolverEnabled enabled) {
+  switch (enabled) {
+    case ReferenceResolverEnabled::kCheckedExpressionOnly:
+      return google::api::expr::runtime::ReferenceResolverOption::kCheckedOnly;
+    case ReferenceResolverEnabled::kAlways:
+      return google::api::expr::runtime::ReferenceResolverOption::kAlways;
+  }
+  ABSL_LOG(FATAL) << ""unsupported ReferenceResolverEnabled enumerator: ""
+                  << static_cast<int>(enabled);
+}
+}  
+absl::Status EnableReferenceResolver(RuntimeBuilder& builder,
+                                     ReferenceResolverEnabled enabled) {
+  CEL_ASSIGN_OR_RETURN(RuntimeImpl * runtime_impl,
+                       RuntimeImplFromBuilder(builder));
+  ABSL_ASSERT(runtime_impl != nullptr);
+  runtime_impl->expr_builder().AddAstTransform(
+      NewReferenceResolverExtension(Convert(enabled)));
+  return absl::OkStatus();
+}
+}  
+
+Return only Google Test code.
+"
+function_1820,GetInputBitwidths,datasets/extracted/functions/function_1820_GetInputBitwidths.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/core/profiler/utils/xprof_gpu_cost_analysis.h""
+#include <algorithm>
+#include <cstdint>
+#include <memory>
+#include <vector>
+#include ""absl/status/status.h""
+#include ""xla/hlo/ir/hlo_instruction.h""
+#include ""xla/primitive_util.h""
+#include ""xla/service/gpu/model/gpu_hlo_cost_analysis.h""
+#include ""xla/service/hlo_cost_analysis.h""
+namespace tensorflow {
+namespace profiler {
+namespace {
+std::vector<uint32_t> GetInputBitwidths(const xla::HloInstruction& hlo) {
+  std::vector<uint32_t> input_bitwidths;
+  for (const auto& operand : hlo.operands()) {
+    switch (operand->shape().element_type()) {
+      case xla::PRIMITIVE_TYPE_INVALID:
+      case xla::TUPLE:
+      case xla::OPAQUE_TYPE:
+      case xla::TOKEN:
+        break;
+      default:
+        input_bitwidths.push_back(
+            xla::primitive_util::BitWidth(operand->shape().element_type()));
+    }
+  }
+  return input_bitwidths;
+}
+}  
+absl::Status XProfGpuCostAnalysis::Postprocess(const xla::HloInstruction* hlo) {
+  if (hlo == nullptr) {
+    return absl::OkStatus();
+  }
+  uint32_t flop_rate_adjustment = 1;
+  float model_flops = current_properties_[kFlopsKey];
+  std::vector<uint32_t> input_bitwidths = GetInputBitwidths(*hlo);
+  if (!input_bitwidths.empty()) {
+    int max_input_bitwidth =
+        *std::max_element(input_bitwidths.begin(), input_bitwidths.end());
+    if (model_flops) {
+      switch (max_input_bitwidth) {
+        case 8:
+          flop_rate_adjustment = 2;
+          break;
+        case 4:
+          flop_rate_adjustment = 4;
+          break;
+      }
+    }
+  }
+  current_properties_[kDeviceFlopsAdjustment] =
+      model_flops - model_flops / flop_rate_adjustment;
+  return xla::gpu::GpuHloCostAnalysis::Postprocess(hlo);
+}
+std::unique_ptr<xla::HloCostAnalysis>
+XProfGpuCostAnalysis::CreateNestedCostAnalysis() {
+  return std::make_unique<XProfGpuCostAnalysis>(options_);
+}
+int64_t XProfGpuCostAnalysis::GetDeviceFlopsAdjustment(
+    const xla::HloInstruction& hlo) {
+  return GetPropertyForHlo(hlo, kDeviceFlopsAdjustment, hlo_properties_);
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_1185,Decode,datasets/extracted/functions/function_1185_Decode.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""quiche/http2/hpack/decoder/hpack_block_decoder.h""
+#include <cstdint>
+#include <ostream>
+#include <string>
+#include ""absl/strings/str_cat.h""
+#include ""quiche/common/platform/api/quiche_flag_utils.h""
+#include ""quiche/common/platform/api/quiche_logging.h""
+namespace http2 {
+DecodeStatus HpackBlockDecoder::Decode(DecodeBuffer* db) {
+  if (!before_entry_) {
+    QUICHE_DVLOG(2) << ""HpackBlockDecoder::Decode resume entry, db->Remaining=""
+                    << db->Remaining();
+    DecodeStatus status = entry_decoder_.Resume(db, listener_);
+    switch (status) {
+      case DecodeStatus::kDecodeDone:
+        before_entry_ = true;
+        break;
+      case DecodeStatus::kDecodeInProgress:
+        QUICHE_DCHECK_EQ(0u, db->Remaining());
+        return DecodeStatus::kDecodeInProgress;
+      case DecodeStatus::kDecodeError:
+        QUICHE_CODE_COUNT_N(decompress_failure_3, 1, 23);
+        return DecodeStatus::kDecodeError;
+    }
+  }
+  QUICHE_DCHECK(before_entry_);
+  while (db->HasData()) {
+    QUICHE_DVLOG(2) << ""HpackBlockDecoder::Decode start entry, db->Remaining=""
+                    << db->Remaining();
+    DecodeStatus status = entry_decoder_.Start(db, listener_);
+    switch (status) {
+      case DecodeStatus::kDecodeDone:
+        continue;
+      case DecodeStatus::kDecodeInProgress:
+        QUICHE_DCHECK_EQ(0u, db->Remaining());
+        before_entry_ = false;
+        return DecodeStatus::kDecodeInProgress;
+      case DecodeStatus::kDecodeError:
+        QUICHE_CODE_COUNT_N(decompress_failure_3, 2, 23);
+        return DecodeStatus::kDecodeError;
+    }
+    QUICHE_DCHECK(false);
+  }
+  QUICHE_DCHECK(before_entry_);
+  return DecodeStatus::kDecodeDone;
+}
+std::string HpackBlockDecoder::DebugString() const {
+  return absl::StrCat(
+      ""HpackBlockDecoder("", entry_decoder_.DebugString(), "", listener@"",
+      absl::Hex(reinterpret_cast<intptr_t>(listener_)),
+      (before_entry_ ? "", between entries)"" : "", in an entry)""));
+}
+std::ostream& operator<<(std::ostream& out, const HpackBlockDecoder& v) {
+  return out << v.DebugString();
+}
+}  
+
+Return only Google Test code.
+"
+function_1681,QuicSocketAddressCoder,datasets/extracted/functions/function_1681_QuicSocketAddressCoder.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""quiche/quic/core/quic_socket_address_coder.h""
+#include <cstring>
+#include <string>
+#include <vector>
+#include ""quiche/quic/platform/api/quic_ip_address_family.h""
+namespace quic {
+namespace {
+const uint16_t kIPv4 = 2;
+const uint16_t kIPv6 = 10;
+}  
+QuicSocketAddressCoder::QuicSocketAddressCoder() {}
+QuicSocketAddressCoder::QuicSocketAddressCoder(const QuicSocketAddress& address)
+    : address_(address) {}
+QuicSocketAddressCoder::~QuicSocketAddressCoder() {}
+std::string QuicSocketAddressCoder::Encode() const {
+  std::string serialized;
+  uint16_t address_family;
+  switch (address_.host().address_family()) {
+    case IpAddressFamily::IP_V4:
+      address_family = kIPv4;
+      break;
+    case IpAddressFamily::IP_V6:
+      address_family = kIPv6;
+      break;
+    default:
+      return serialized;
+  }
+  serialized.append(reinterpret_cast<const char*>(&address_family),
+                    sizeof(address_family));
+  serialized.append(address_.host().ToPackedString());
+  uint16_t port = address_.port();
+  serialized.append(reinterpret_cast<const char*>(&port), sizeof(port));
+  return serialized;
+}
+bool QuicSocketAddressCoder::Decode(const char* data, size_t length) {
+  uint16_t address_family;
+  if (length < sizeof(address_family)) {
+    return false;
+  }
+  memcpy(&address_family, data, sizeof(address_family));
+  data += sizeof(address_family);
+  length -= sizeof(address_family);
+  size_t ip_length;
+  switch (address_family) {
+    case kIPv4:
+      ip_length = QuicIpAddress::kIPv4AddressSize;
+      break;
+    case kIPv6:
+      ip_length = QuicIpAddress::kIPv6AddressSize;
+      break;
+    default:
+      return false;
+  }
+  if (length < ip_length) {
+    return false;
+  }
+  std::vector<uint8_t> ip(ip_length);
+  memcpy(&ip[0], data, ip_length);
+  data += ip_length;
+  length -= ip_length;
+  uint16_t port;
+  if (length != sizeof(port)) {
+    return false;
+  }
+  memcpy(&port, data, length);
+  QuicIpAddress ip_address;
+  ip_address.FromPackedString(reinterpret_cast<const char*>(&ip[0]), ip_length);
+  address_ = QuicSocketAddress(ip_address, port);
+  return true;
+}
+}  
+
+Return only Google Test code.
+"
+function_1963,EvaluateAffineExpr,datasets/extracted/functions/function_1963_EvaluateAffineExpr.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/service/gpu/model/affine_map_evaluator.h""
+#include <cstdint>
+#include <vector>
+#include ""absl/types/span.h""
+#include ""llvm/Support/MathExtras.h""
+#include ""mlir/IR/AffineExpr.h""
+#include ""mlir/IR/AffineMap.h""
+#include ""mlir/Support/LLVM.h""
+#include ""tsl/platform/logging.h""  
+namespace xla {
+namespace gpu {
+namespace {
+using llvm::SmallVector;
+using mlir::AffineBinaryOpExpr;
+using mlir::AffineConstantExpr;
+using mlir::AffineDimExpr;
+using mlir::AffineExpr;
+using mlir::AffineExprKind;
+using mlir::AffineMap;
+using mlir::AffineSymbolExpr;
+}  
+int64_t EvaluateAffineExpr(AffineExpr expr,
+                           absl::Span<int64_t const> dim_values,
+                           absl::Span<int64_t const> symbol_values) {
+  AffineExprKind kind = expr.getKind();
+  if (kind == AffineExprKind::Constant) {
+    return mlir::cast<AffineConstantExpr>(expr).getValue();
+  }
+  if (kind == AffineExprKind::DimId) {
+    return dim_values[mlir::cast<AffineDimExpr>(expr).getPosition()];
+  }
+  if (kind == AffineExprKind::SymbolId) {
+    return symbol_values[mlir::cast<AffineSymbolExpr>(expr).getPosition()];
+  }
+  auto binary_expr = mlir::cast<AffineBinaryOpExpr>(expr);
+  int64_t lhs =
+      EvaluateAffineExpr(binary_expr.getLHS(), dim_values, symbol_values);
+  int64_t rhs =
+      EvaluateAffineExpr(binary_expr.getRHS(), dim_values, symbol_values);
+  switch (kind) {
+    case AffineExprKind::Add:
+      return lhs + rhs;
+    case AffineExprKind::Mul:
+      return lhs * rhs;
+    case AffineExprKind::FloorDiv:
+      return llvm::divideFloorSigned(lhs, rhs);
+    case AffineExprKind::Mod:
+      return lhs % rhs;
+    default:
+      LOG(FATAL) << ""Unsupported expression"";
+  }
+}
+SmallVector<int64_t> EvaluateAffineMap(
+    AffineMap affine_map, absl::Span<int64_t const> dim_values,
+    absl::Span<int64_t const> symbol_values) {
+  CHECK_EQ(affine_map.getNumDims(), dim_values.size());
+  CHECK_EQ(affine_map.getNumSymbols(), symbol_values.size());
+  SmallVector<int64_t> results;
+  results.reserve(affine_map.getNumResults());
+  for (auto expr : affine_map.getResults()) {
+    results.push_back(EvaluateAffineExpr(expr, dim_values, symbol_values));
+  }
+  return results;
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_2461,FindInlineBlock,datasets/extracted/functions/function_2461_FindInlineBlock.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/lite/delegates/gpu/gl/compiler/preprocessor.h""
+#include <string>
+#include <utility>
+#include ""absl/strings/str_cat.h""
+#include ""absl/strings/string_view.h""
+#include ""tensorflow/lite/delegates/gpu/common/status.h""
+namespace tflite {
+namespace gpu {
+namespace gl {
+namespace {
+absl::string_view FindInlineBlock(absl::string_view s, char delimiter) {
+  size_t start = s.find(delimiter);
+  if (start != absl::string_view::npos) {
+    size_t end = s.find(delimiter, start + 1);
+    if (end != std::string::npos) {
+      return s.substr(start, end - start + 1);
+    }
+    return s.substr(start, 1);
+  }
+  return s.substr(s.size(), 0);
+}
+absl::string_view PastSubstr(absl::string_view s, absl::string_view subs) {
+  return s.substr(subs.data() + subs.size() - s.data());
+}
+}  
+absl::Status TextPreprocessor::Rewrite(const std::string& input,
+                                       std::string* output) {
+  absl::string_view s = input;
+  std::string result;
+  while (true) {
+    absl::string_view inline_block = FindInlineBlock(s, inline_delimiter_);
+    result.append(s.data(), inline_block.data() - s.data());
+    if (inline_block.empty()) {
+      break;
+    }
+    if (inline_block.size() == 1) {
+      return absl::NotFoundError(""Unable to find end of inline block"");
+    }
+    s = PastSubstr(s, inline_block);
+    bool processed = false;
+    for (auto& rewrite : inline_rewrites_) {
+      if (processed) {
+        break;
+      }
+      switch (rewrite->Rewrite(inline_block.substr(1, inline_block.size() - 2),
+                               &result)) {
+        case RewriteStatus::NOT_RECOGNIZED:
+          break;
+        case RewriteStatus::SUCCESS:
+          processed = true;
+          break;
+        case RewriteStatus::ERROR:
+          return absl::InternalError(absl::StrCat(""Error while rewriting '"",
+                                                  inline_block, ""': "", result));
+      }
+    }
+    if (!processed) {
+      if (!keep_unknown_rewrites_) {
+        return absl::NotFoundError(absl::StrCat(
+            ""Didn't find inline rewrite for '"", inline_block, ""'""));
+      }
+      absl::StrAppend(&result, inline_block);
+    }
+  }
+  *output = std::move(result);
+  return absl::OkStatus();
+}
+}  
+}  
+}  
+
+Return only Google Test code.
+"
+function_2905,QuicAlarm,datasets/extracted/functions/function_2905_QuicAlarm.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""quiche/quic/core/quic_alarm.h""
+#include <atomic>
+#include <cstdlib>
+#include <utility>
+#include ""quiche/quic/platform/api/quic_bug_tracker.h""
+#include ""quiche/quic/platform/api/quic_flag_utils.h""
+#include ""quiche/quic/platform/api/quic_flags.h""
+#include ""quiche/quic/platform/api/quic_stack_trace.h""
+namespace quic {
+QuicAlarm::QuicAlarm(QuicArenaScopedPtr<Delegate> delegate)
+    : delegate_(std::move(delegate)), deadline_(QuicTime::Zero()) {}
+QuicAlarm::~QuicAlarm() {
+  if (IsSet()) {
+    QUIC_CODE_COUNT(quic_alarm_not_cancelled_in_dtor);
+  }
+}
+void QuicAlarm::Set(QuicTime new_deadline) {
+  QUICHE_DCHECK(!IsSet());
+  QUICHE_DCHECK(new_deadline.IsInitialized());
+  if (IsPermanentlyCancelled()) {
+    QUIC_BUG(quic_alarm_illegal_set)
+        << ""Set called after alarm is permanently cancelled. new_deadline:""
+        << new_deadline;
+    return;
+  }
+  deadline_ = new_deadline;
+  SetImpl();
+}
+void QuicAlarm::CancelInternal(bool permanent) {
+  if (IsSet()) {
+    deadline_ = QuicTime::Zero();
+    CancelImpl();
+  }
+  if (permanent) {
+    delegate_.reset();
+  }
+}
+bool QuicAlarm::IsPermanentlyCancelled() const { return delegate_ == nullptr; }
+void QuicAlarm::Update(QuicTime new_deadline, QuicTime::Delta granularity) {
+  if (IsPermanentlyCancelled()) {
+    QUIC_BUG(quic_alarm_illegal_update)
+        << ""Update called after alarm is permanently cancelled. new_deadline:""
+        << new_deadline << "", granularity:"" << granularity;
+    return;
+  }
+  if (!new_deadline.IsInitialized()) {
+    Cancel();
+    return;
+  }
+  if (std::abs((new_deadline - deadline_).ToMicroseconds()) <
+      granularity.ToMicroseconds()) {
+    return;
+  }
+  const bool was_set = IsSet();
+  deadline_ = new_deadline;
+  if (was_set) {
+    UpdateImpl();
+  } else {
+    SetImpl();
+  }
+}
+bool QuicAlarm::IsSet() const { return deadline_.IsInitialized(); }
+void QuicAlarm::Fire() {
+  if (!IsSet()) {
+    return;
+  }
+  deadline_ = QuicTime::Zero();
+  if (!IsPermanentlyCancelled()) {
+    QuicConnectionContextSwitcher context_switcher(
+        delegate_->GetConnectionContext());
+    delegate_->OnAlarm();
+  }
+}
+void QuicAlarm::UpdateImpl() {
+  const QuicTime new_deadline = deadline_;
+  deadline_ = QuicTime::Zero();
+  CancelImpl();
+  deadline_ = new_deadline;
+  SetImpl();
+}
+}  
+
+Return only Google Test code.
+"
+function_3163,FusionKindToString,datasets/extracted/functions/function_3163_FusionKindToString.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/service/gpu/transforms/rename_fusions.h""
+#include <memory>
+#include <string>
+#include ""absl/container/btree_set.h""
+#include ""absl/container/flat_hash_set.h""
+#include ""absl/status/statusor.h""
+#include ""absl/strings/str_cat.h""
+#include ""absl/strings/str_join.h""
+#include ""absl/strings/str_replace.h""
+#include ""absl/strings/string_view.h""
+#include ""xla/hlo/ir/hlo_computation.h""
+#include ""xla/hlo/ir/hlo_instruction.h""
+#include ""xla/hlo/ir/hlo_module.h""
+#include ""xla/hlo/ir/hlo_opcode.h""
+#include ""xla/service/gpu/hlo_traversal.h""
+#include ""xla/service/gpu/ir_emission_utils.h""
+namespace xla {
+namespace gpu {
+namespace {
+constexpr absl::string_view FusionKindToString(
+    HloInstruction::FusionKind kind) {
+  switch (kind) {
+    case HloInstruction::FusionKind::kCustom:
+      return ""custom"";
+    case HloInstruction::FusionKind::kLoop:
+      return ""loop"";
+    case HloInstruction::FusionKind::kInput:
+      return ""input"";
+    case HloInstruction::FusionKind::kOutput:
+      return ""output"";
+  }
+}
+std::string MakeFusionHeroNames(const HloInstruction* instruction) {
+  std::unique_ptr<HloFusionAdaptor> fusion_adaptor =
+      HloFusionAdaptor::ForInstruction(instruction);
+  absl::btree_set<absl::string_view> heroes;
+  for (auto root : fusion_adaptor->GetRoots()) {
+    heroes.insert(HloOpcodeString(FindNonTrivialHero(root).opcode()));
+  }
+  return absl::StrReplaceAll(absl::StrJoin(heroes, ""_""), {{""-"", ""_""}});
+}
+void RenameFusion(HloModule* module, HloInstruction* instruction) {
+  std::string hero_names = MakeFusionHeroNames(instruction);
+  module->SetAndUniquifyInstrName(
+      instruction, absl::StrCat(FusionKindToString(instruction->fusion_kind()),
+                                ""_"", hero_names, ""_fusion""));
+  module->SetAndUniquifyComputationName(
+      instruction->fused_instructions_computation(),
+      absl::StrCat(""fused_"", hero_names));
+}
+}  
+absl::StatusOr<bool> RenameFusions::Run(
+    HloModule* module,
+    const absl::flat_hash_set<absl::string_view>& execution_threads) {
+  for (HloComputation* computation : module->MakeNonfusionComputations()) {
+    for (HloInstruction* instruction : computation->instructions()) {
+      if (instruction->opcode() != HloOpcode::kFusion ||
+          instruction->fusion_kind() == HloInstruction::FusionKind::kCustom) {
+        continue;
+      }
+      RenameFusion(module, instruction);
+    }
+  }
+  return true;
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_1903,PointwiseUnaryOpPrepare,datasets/extracted/functions/function_1903_PointwiseUnaryOpPrepare.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include <cmath>
+#include ""tensorflow/lite/core/c/common.h""
+#include ""tensorflow/lite/kernels/custom_ops_register.h""
+#include ""tensorflow/lite/kernels/internal/tensor_ctypes.h""
+#include ""tensorflow/lite/kernels/kernel_util.h""
+namespace tflite {
+namespace ops {
+namespace custom {
+namespace sign {
+TfLiteStatus PointwiseUnaryOpPrepare(TfLiteContext* context, TfLiteNode* node) {
+  TF_LITE_ENSURE_EQ(context, tflite::NumInputs(node), 1);
+  const TfLiteTensor* input = tflite::GetInput(context, node, 0);
+  TfLiteTensor* output = tflite::GetOutput(context, node, 0);
+  TF_LITE_ENSURE_TYPES_EQ(context, input->type, output->type);
+  TfLiteIntArray* output_shape = TfLiteIntArrayCopy(input->dims);
+  return context->ResizeTensor(context, output, output_shape);
+}
+template <typename Op, typename T>
+TfLiteStatus PointwiseUnaryOpDoEval(
+    TfLiteContext* context,
+    const TfLiteTensor* input,
+    TfLiteTensor* output) {
+  const T* data = tflite::GetTensorData<T>(input);
+  T* data_output = tflite::GetTensorData<T>(output);
+  const int64_t num_elements = NumElements(input);
+  for (int64_t i = 0; i < num_elements; ++i) {
+    data_output[i] = Op::template Eval<T>(data[i]);
+  }
+  return TfLiteStatus::kTfLiteOk;
+}
+template <typename Op>
+TfLiteStatus PointwiseUnaryOpEval(TfLiteContext* context, TfLiteNode* node) {
+  const TfLiteTensor* input = tflite::GetInput(context, node, 0);
+  TfLiteTensor* output = tflite::GetOutput(context, node, 0);
+  switch (output->type) {
+    case kTfLiteFloat32:
+      TF_LITE_ENSURE_OK(
+          context,
+          (PointwiseUnaryOpDoEval<Op, float>(context, input, output)));
+      break;
+    case kTfLiteFloat64:
+      TF_LITE_ENSURE_OK(
+          context,
+          (PointwiseUnaryOpDoEval<Op, double>(context, input, output)));
+      break;
+    default: {
+      TF_LITE_KERNEL_LOG(context, ""Unsupported datatype for sign output: %s"",
+                         TfLiteTypeGetName(output->type));
+      return TfLiteStatus::kTfLiteError;
+    }
+  }
+  return TfLiteStatus::kTfLiteOk;
+}
+struct Sign {
+  template <typename T>
+  static T Eval(T x) {
+    if (x > 0) {
+      return 1;
+    }
+    if (x < 0) {
+      return -1;
+    }
+    return 0;
+  }
+};
+}  
+TfLiteRegistration* Register_SIGN() {
+  static TfLiteRegistration r = {nullptr, nullptr,
+                                 sign::PointwiseUnaryOpPrepare,
+                                 sign::PointwiseUnaryOpEval<sign::Sign>};
+  return &r;
+}
+}  
+}  
+}  
+
+Return only Google Test code.
+"
+function_0181,QpackEncoderStreamReceiver,datasets/extracted/functions/function_0181_QpackEncoderStreamReceiver.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""quiche/quic/core/qpack/qpack_encoder_stream_receiver.h""
+#include ""absl/strings/string_view.h""
+#include ""quiche/http2/decoder/decode_buffer.h""
+#include ""quiche/http2/decoder/decode_status.h""
+#include ""quiche/quic/core/qpack/qpack_instructions.h""
+#include ""quiche/quic/platform/api/quic_logging.h""
+namespace quic {
+QpackEncoderStreamReceiver::QpackEncoderStreamReceiver(Delegate* delegate)
+    : instruction_decoder_(QpackEncoderStreamLanguage(), this),
+      delegate_(delegate),
+      error_detected_(false) {
+  QUICHE_DCHECK(delegate_);
+}
+void QpackEncoderStreamReceiver::Decode(absl::string_view data) {
+  if (data.empty() || error_detected_) {
+    return;
+  }
+  instruction_decoder_.Decode(data);
+}
+bool QpackEncoderStreamReceiver::OnInstructionDecoded(
+    const QpackInstruction* instruction) {
+  if (instruction == InsertWithNameReferenceInstruction()) {
+    delegate_->OnInsertWithNameReference(instruction_decoder_.s_bit(),
+                                         instruction_decoder_.varint(),
+                                         instruction_decoder_.value());
+    return true;
+  }
+  if (instruction == InsertWithoutNameReferenceInstruction()) {
+    delegate_->OnInsertWithoutNameReference(instruction_decoder_.name(),
+                                            instruction_decoder_.value());
+    return true;
+  }
+  if (instruction == DuplicateInstruction()) {
+    delegate_->OnDuplicate(instruction_decoder_.varint());
+    return true;
+  }
+  QUICHE_DCHECK_EQ(instruction, SetDynamicTableCapacityInstruction());
+  delegate_->OnSetDynamicTableCapacity(instruction_decoder_.varint());
+  return true;
+}
+void QpackEncoderStreamReceiver::OnInstructionDecodingError(
+    QpackInstructionDecoder::ErrorCode error_code,
+    absl::string_view error_message) {
+  QUICHE_DCHECK(!error_detected_);
+  error_detected_ = true;
+  QuicErrorCode quic_error_code;
+  switch (error_code) {
+    case QpackInstructionDecoder::ErrorCode::INTEGER_TOO_LARGE:
+      quic_error_code = QUIC_QPACK_ENCODER_STREAM_INTEGER_TOO_LARGE;
+      break;
+    case QpackInstructionDecoder::ErrorCode::STRING_LITERAL_TOO_LONG:
+      quic_error_code = QUIC_QPACK_ENCODER_STREAM_STRING_LITERAL_TOO_LONG;
+      break;
+    case QpackInstructionDecoder::ErrorCode::HUFFMAN_ENCODING_ERROR:
+      quic_error_code = QUIC_QPACK_ENCODER_STREAM_HUFFMAN_ENCODING_ERROR;
+      break;
+    default:
+      quic_error_code = QUIC_INTERNAL_ERROR;
+  }
+  delegate_->OnErrorDetected(quic_error_code, error_message);
+}
+}  
+
+Return only Google Test code.
+"
+function_2346,GetConvnetDataFormatAttrString,datasets/extracted/functions/function_2346_GetConvnetDataFormatAttrString.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/core/util/tensor_format.h""
+namespace tensorflow {
+string GetConvnetDataFormatAttrString() {
+  return ""data_format: { 'NHWC', 'NCHW' } = 'NHWC' "";
+}
+string GetConvnet3dDataFormatAttrString() {
+  return ""data_format: { 'NDHWC', 'NCDHW' } = 'NDHWC' "";
+}
+string GetConvnetDataFormat2D3DAttrString() {
+  return ""data_format: { 'NHWC', 'NCHW', 'NDHWC', 'NCDHW' } = 'NHWC' "";
+}
+string GetConvnetFilterFormatAttrString() {
+  return ""filter_format: { 'HWIO', 'OIHW' } = 'HWIO' "";
+}
+string GetConvnet3dFilterFormatAttrString() {
+  return ""filter_format: { 'DHWIO', 'OIDHW' } = 'DHWIO' "";
+}
+string ToString(TensorFormat format) {
+  switch (format) {
+    case FORMAT_NHWC:
+      return ""NHWC"";
+    case FORMAT_NCHW:
+      return ""NCHW"";
+    case FORMAT_NCHW_VECT_C:
+      return ""NCHW_VECT_C"";
+    case FORMAT_NHWC_VECT_W:
+      return ""NHWC_VECT_W"";
+    case FORMAT_HWNC:
+      return ""HWNC"";
+    case FORMAT_HWCN:
+      return ""HWCN"";
+    default:
+      LOG(FATAL) << ""Invalid Format: "" << static_cast<int32>(format);
+      return ""INVALID_FORMAT"";
+  }
+}
+string ToString(FilterTensorFormat format) {
+  switch (format) {
+    case FORMAT_HWIO:
+      return ""HWIO"";
+    case FORMAT_OIHW:
+      return ""OIHW"";
+    case FORMAT_OHWI:
+      return ""OHWI"";
+    case FORMAT_OIHW_VECT_I:
+      return ""OIHW_VECT_I"";
+    default:
+      LOG(FATAL) << ""Invalid Filter Format: "" << static_cast<int32>(format);
+      return ""INVALID_FORMAT"";
+  }
+}
+bool FormatFromString(absl::string_view format_str, TensorFormat* format) {
+  if (format_str == ""NHWC"" || format_str == ""NDHWC"") {
+    *format = FORMAT_NHWC;
+    return true;
+  }
+  if (format_str == ""NCHW"" || format_str == ""NCDHW"") {
+    *format = FORMAT_NCHW;
+    return true;
+  }
+  if (format_str == ""NCHW_VECT_C"") {
+    *format = FORMAT_NCHW_VECT_C;
+    return true;
+  }
+  if (format_str == ""NHWC_VECT_W"") {
+    *format = FORMAT_NHWC_VECT_W;
+    return true;
+  }
+  if (format_str == ""HWNC"") {
+    *format = FORMAT_HWNC;
+    return true;
+  }
+  if (format_str == ""HWCN"") {
+    *format = FORMAT_HWCN;
+    return true;
+  }
+  return false;
+}
+bool FilterFormatFromString(absl::string_view format_str,
+                            FilterTensorFormat* format) {
+  if (format_str == ""HWIO"" || format_str == ""DHWIO"") {
+    *format = FORMAT_HWIO;
+    return true;
+  }
+  if (format_str == ""OIHW"" || format_str == ""OIDHW"") {
+    *format = FORMAT_OIHW;
+    return true;
+  }
+  if (format_str == ""OIHW_VECT_I"") {
+    *format = FORMAT_OIHW_VECT_I;
+    return true;
+  }
+  return false;
+}
+}  
+
+Return only Google Test code.
+"
+function_1391,GetNumSubtractionSubBoxes,datasets/extracted/functions/function_1391_GetNumSubtractionSubBoxes.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorstore/internal/box_difference.h""
+#include <cassert>
+#include <limits>
+#include ""tensorstore/box.h""
+#include ""tensorstore/index.h""
+#include ""tensorstore/index_interval.h""
+#include ""tensorstore/internal/integer_overflow.h""
+namespace tensorstore {
+namespace internal {
+namespace {
+Index GetNumSubtractionSubBoxes(BoxView<> outer, BoxView<> inner) {
+  assert(outer.rank() == inner.rank());
+  const DimensionIndex rank = outer.rank();
+  Index total_count = 1;
+  for (DimensionIndex i = 0; i < rank; ++i) {
+    IndexInterval outer_interval = outer[i];
+    IndexInterval inner_interval = inner[i];
+    Index num_parts = 1;
+    if (Intersect(outer_interval, inner_interval).empty()) {
+      return 1;
+    }
+    if (outer_interval.inclusive_min() < inner_interval.inclusive_min()) {
+      ++num_parts;
+    }
+    if (outer_interval.inclusive_max() > inner_interval.inclusive_max()) {
+      ++num_parts;
+    }
+    total_count *= num_parts;
+  }
+  return total_count - 1;
+}
+}  
+BoxDifference::BoxDifference(BoxView<> outer, BoxView<> inner)
+    : outer_(outer),
+      inner_(inner),
+      num_sub_boxes_(GetNumSubtractionSubBoxes(outer, inner)) {}
+void BoxDifference::GetSubBox(Index sub_box_index, MutableBoxView<> out) const {
+  const DimensionIndex rank = out.rank();
+  assert(rank == outer_.rank());
+  assert(sub_box_index >= 0 && sub_box_index < num_sub_boxes_);
+  ++sub_box_index;
+  for (DimensionIndex i = 0; i < rank; ++i) {
+    IndexInterval outer_interval = outer_[i];
+    IndexInterval inner_interval = inner_[i];
+    Index num_parts = 1;
+    IndexInterval intersection = Intersect(outer_interval, inner_interval);
+    if (intersection.empty()) {
+      out.DeepAssign(outer_);
+      return;
+    }
+    const bool has_before =
+        outer_interval.inclusive_min() < inner_interval.inclusive_min();
+    const bool has_after =
+        outer_interval.inclusive_max() > inner_interval.inclusive_max();
+    if (has_before) ++num_parts;
+    if (has_after) ++num_parts;
+    const Index part_i = sub_box_index % num_parts;
+    switch (part_i) {
+      case 0:
+        out[i] = intersection;
+        break;
+      case 1:
+        if (has_before) {
+          out[i] = IndexInterval::UncheckedHalfOpen(
+              outer_interval.inclusive_min(), inner_interval.inclusive_min());
+          break;
+        }
+        [[fallthrough]];
+      case 2:
+        out[i] = IndexInterval::UncheckedHalfOpen(
+            inner_interval.exclusive_max(), outer_interval.exclusive_max());
+        break;
+    }
+    sub_box_index /= num_parts;
+  }
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_3119,WritableFileRawStream,datasets/extracted/functions/function_3119_WritableFileRawStream.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/compiler/mlir/tensorflow/utils/dump_graph.h""
+#include <cstdint>
+#include <cstring>
+#include <string>
+#include <utility>
+#include ""llvm/ADT/StringMap.h""
+#include ""llvm/ADT/StringRef.h""
+#include ""llvm/ADT/Twine.h""
+#include ""llvm/Support/FormatVariadic.h""
+#include ""llvm/Support/raw_ostream.h""
+#include ""mlir/IR/Operation.h""  
+#include ""mlir/IR/Verifier.h""  
+#include ""tensorflow/compiler/mlir/tensorflow/utils/error_util.h""
+#include ""tensorflow/core/ir/importexport/graphdef_import.h""
+#include ""tensorflow/core/platform/env.h""
+#include ""tensorflow/core/platform/logging.h""
+#include ""tensorflow/core/platform/path.h""
+#include ""tensorflow/core/util/dump_graph.h""
+namespace tensorflow {
+namespace {
+struct WritableFileRawStream : public llvm::raw_ostream {
+  explicit WritableFileRawStream(WritableFile* file) : file(file) {
+    SetUnbuffered();
+  }
+  ~WritableFileRawStream() override = default;
+  uint64_t current_pos() const override { return 0; }
+  void write_impl(const char* ptr, size_t size) override {
+    if (file) {
+      Status s = file->Append(StringPiece(ptr, size));
+      if (!s.ok()) {
+        LOG(WARNING) << ""Write failed: "" << s;
+        file = nullptr;
+      }
+    }
+  }
+  WritableFile* file;
+};
+}  
+Status DumpTextualIRToFile(const MlirDumpConfig& config, const Graph& graph,
+                           const FunctionLibraryDefinition* flib_def,
+                           WritableFile* file) {
+  WritableFileRawStream os(std::move(file));
+  mlir::MLIRContext context;
+  mlir::OwningOpRef<mlir::ModuleOp> module;
+  if (flib_def) {
+    flib_def = &graph.flib_def();
+  }
+  auto convert = [&]() -> Status {
+    mlir::StatusScopedDiagnosticHandler status_handler(&context);
+    GraphDebugInfo debug_info;
+    switch (config.dialect) {
+      case MlirDumpConfig::Dialect::kTFG: {
+        TF_ASSIGN_OR_RETURN(module,
+                            mlir::tfg::ImportGraphAndFunctionsToMlir(
+                                &context, debug_info, graph,
+                                flib_def ? *flib_def : graph.flib_def()));
+        break;
+      }
+    }
+    if (failed(mlir::verify(*module))) {
+      return status_handler.ConsumeStatus();
+    }
+    return status_handler.ConsumeStatus();
+  };
+  TF_RETURN_IF_ERROR(convert());
+  module->print(os, config.op_printing_flags);
+  return absl::OkStatus();
+}
+void UseMlirForGraphDump(const MlirDumpConfig& config) {
+  SetGraphDumper(
+      [config](const Graph& graph, const FunctionLibraryDefinition* flib_def,
+               WritableFile* file) -> Status {
+        return DumpTextualIRToFile(config, graph, flib_def, file);
+      },
+      "".mlir"");
+}
+}  
+
+Return only Google Test code.
+"
+function_0089,operator,datasets/extracted/functions/function_0089_operator.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""eval/public/cel_attribute.h""
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <variant>
+#include <vector>
+#include ""absl/strings/string_view.h""
+#include ""eval/public/cel_value.h""
+namespace google::api::expr::runtime {
+namespace {
+struct QualifierVisitor {
+  CelAttributeQualifierPattern operator()(absl::string_view v) {
+    if (v == ""*"") {
+      return CelAttributeQualifierPattern::CreateWildcard();
+    }
+    return CelAttributeQualifierPattern::OfString(std::string(v));
+  }
+  CelAttributeQualifierPattern operator()(int64_t v) {
+    return CelAttributeQualifierPattern::OfInt(v);
+  }
+  CelAttributeQualifierPattern operator()(uint64_t v) {
+    return CelAttributeQualifierPattern::OfUint(v);
+  }
+  CelAttributeQualifierPattern operator()(bool v) {
+    return CelAttributeQualifierPattern::OfBool(v);
+  }
+  CelAttributeQualifierPattern operator()(CelAttributeQualifierPattern v) {
+    return v;
+  }
+};
+}  
+CelAttributeQualifierPattern CreateCelAttributeQualifierPattern(
+    const CelValue& value) {
+  switch (value.type()) {
+    case cel::Kind::kInt64:
+      return CelAttributeQualifierPattern::OfInt(value.Int64OrDie());
+    case cel::Kind::kUint64:
+      return CelAttributeQualifierPattern::OfUint(value.Uint64OrDie());
+    case cel::Kind::kString:
+      return CelAttributeQualifierPattern::OfString(
+          std::string(value.StringOrDie().value()));
+    case cel::Kind::kBool:
+      return CelAttributeQualifierPattern::OfBool(value.BoolOrDie());
+    default:
+      return CelAttributeQualifierPattern(CelAttributeQualifier());
+  }
+}
+CelAttributeQualifier CreateCelAttributeQualifier(const CelValue& value) {
+  switch (value.type()) {
+    case cel::Kind::kInt64:
+      return CelAttributeQualifier::OfInt(value.Int64OrDie());
+    case cel::Kind::kUint64:
+      return CelAttributeQualifier::OfUint(value.Uint64OrDie());
+    case cel::Kind::kString:
+      return CelAttributeQualifier::OfString(
+          std::string(value.StringOrDie().value()));
+    case cel::Kind::kBool:
+      return CelAttributeQualifier::OfBool(value.BoolOrDie());
+    default:
+      return CelAttributeQualifier();
+  }
+}
+CelAttributePattern CreateCelAttributePattern(
+    absl::string_view variable,
+    std::initializer_list<absl::variant<absl::string_view, int64_t, uint64_t,
+                                        bool, CelAttributeQualifierPattern>>
+        path_spec) {
+  std::vector<CelAttributeQualifierPattern> path;
+  path.reserve(path_spec.size());
+  for (const auto& spec_elem : path_spec) {
+    path.emplace_back(absl::visit(QualifierVisitor(), spec_elem));
+  }
+  return CelAttributePattern(std::string(variable), std::move(path));
+}
+}  
+
+Return only Google Test code.
+"
+function_2715,if,datasets/extracted/functions/function_2715_if.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""quiche/quic/moqt/moqt_subscribe_windows.h""
+#include <optional>
+#include <vector>
+#include ""quiche/quic/moqt/moqt_messages.h""
+#include ""quiche/quic/platform/api/quic_bug_tracker.h""
+#include ""quiche/common/platform/api/quiche_logging.h""
+#include ""quiche/web_transport/web_transport.h""
+namespace moqt {
+bool SubscribeWindow::InWindow(const FullSequence& seq) const {
+  if (seq < start_) {
+    return false;
+  }
+  return (!end_.has_value() || seq <= *end_);
+}
+std::optional<webtransport::StreamId> SendStreamMap::GetStreamForSequence(
+    FullSequence sequence) const {
+  ReducedSequenceIndex index(sequence, forwarding_preference_);
+  auto stream_it = send_streams_.find(index);
+  if (stream_it == send_streams_.end()) {
+    return std::nullopt;
+  }
+  return stream_it->second;
+}
+void SendStreamMap::AddStream(FullSequence sequence,
+                              webtransport::StreamId stream_id) {
+  ReducedSequenceIndex index(sequence, forwarding_preference_);
+  if (forwarding_preference_ == MoqtForwardingPreference::kDatagram) {
+    QUIC_BUG(quic_bug_moqt_draft_03_01) << ""Adding a stream for datagram"";
+    return;
+  }
+  auto [stream_it, success] = send_streams_.emplace(index, stream_id);
+  QUIC_BUG_IF(quic_bug_moqt_draft_03_02, !success) << ""Stream already added"";
+}
+void SendStreamMap::RemoveStream(FullSequence sequence,
+                                 webtransport::StreamId stream_id) {
+  ReducedSequenceIndex index(sequence, forwarding_preference_);
+  QUICHE_DCHECK(send_streams_.contains(index) &&
+                send_streams_.find(index)->second == stream_id)
+      << ""Requested to remove a stream ID that does not match the one in the ""
+         ""map"";
+  send_streams_.erase(index);
+}
+bool SubscribeWindow::UpdateStartEnd(FullSequence start,
+                                     std::optional<FullSequence> end) {
+  if (!InWindow(start)) {
+    return false;
+  }
+  if (end_.has_value() && (!end.has_value() || *end_ < *end)) {
+    return false;
+  }
+  start_ = start;
+  end_ = end;
+  return true;
+}
+ReducedSequenceIndex::ReducedSequenceIndex(
+    FullSequence sequence, MoqtForwardingPreference preference) {
+  switch (preference) {
+    case MoqtForwardingPreference::kTrack:
+      sequence_ = FullSequence(0, 0);
+      break;
+    case MoqtForwardingPreference::kSubgroup:
+      sequence_ = FullSequence(sequence.group, 0);
+      break;
+    case MoqtForwardingPreference::kDatagram:
+      sequence_ = sequence;
+      return;
+  }
+}
+std::vector<webtransport::StreamId> SendStreamMap::GetAllStreams() const {
+  std::vector<webtransport::StreamId> ids;
+  for (const auto& [index, id] : send_streams_) {
+    ids.push_back(id);
+  }
+  return ids;
+}
+}  
+
+Return only Google Test code.
+"
+function_0067,JsonEscape,datasets/extracted/functions/function_0067_JsonEscape.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/core/profiler/convert/trace_viewer/trace_events_to_json.h""
+#include <cstdint>
+#include <map>
+#include <string>
+#include <string_view>
+#include <utility>
+#include ""absl/strings/match.h""
+#include ""absl/strings/str_format.h""
+#include ""absl/strings/string_view.h""
+#include ""tensorflow/core/profiler/protobuf/trace_events.pb.h""
+#include ""tensorflow/core/profiler/protobuf/trace_events_raw.pb.h""
+namespace tensorflow {
+namespace profiler {
+std::string JsonEscape(absl::string_view raw) {
+  std::string escaped_string;
+  const size_t length = raw.length();
+  escaped_string.reserve((length + 1) * 2);
+  escaped_string.push_back('""');
+  for (size_t i = 0; i < length; ++i) {
+    const unsigned char c = raw[i];
+    if (c < 0x20) {
+      escaped_string.push_back('\\');
+      switch (c) {
+        case '\b':
+          escaped_string.push_back('b');
+          break;
+        case '\f':
+          escaped_string.push_back('f');
+          break;
+        case '\n':
+          escaped_string.push_back('n');
+          break;
+        case '\r':
+          escaped_string.push_back('r');
+          break;
+        case '\t':
+          escaped_string.push_back('t');
+          break;
+        default:
+          absl::StrAppendFormat(&escaped_string, ""u%04x"",
+                                static_cast<unsigned int>(c));
+      }
+      continue;
+    }
+    switch (c) {
+      case '\""':
+        escaped_string.append(""\\\"""");
+        continue;
+      case '\\':
+        escaped_string.append(""\\\\"");
+        continue;
+      case '<':
+      case '>':
+      case '&': {
+        absl::StrAppendFormat(&escaped_string, ""\\u%04x"",
+                              static_cast<unsigned int>(c));
+        continue;
+      }
+      case '\xe2': {
+        if ((i + 2 < length) && (raw[i + 1] == '\x80')) {
+          if (raw[i + 2] == '\xa8') {
+            escaped_string.append(""\\u2028"");
+            i += 2;
+            continue;
+          } else if (raw[i + 2] == '\xa9') {
+            escaped_string.append(""\\u2029"");
+            i += 2;
+            continue;
+          }
+        }
+        escaped_string.push_back(c);
+        continue;
+      }
+    }
+    escaped_string.push_back(c);
+  }
+  escaped_string.push_back('""');
+  return escaped_string;
+}
+std::string ProtoString(const tsl::protobuf::Message& pb) {
+  return JsonEscape(pb.DebugString());
+}
+std::map<uint64_t, uint64_t> BuildStackFrameReferences(const Trace& trace) {
+  const auto& name_table = trace.name_table();
+  std::map<uint64_t, uint64_t> output;
+  for (const auto& [fp, name] : name_table) {
+    if (!absl::StartsWith(name, ""@@"")) continue;
+    output[fp] = 0;
+  }
+  uint64_t sf = 1;
+  for (auto& it : output) {
+    it.second = sf++;
+  }
+  return output;
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_2790,FastBinarySearchT,datasets/extracted/functions/function_2790_FastBinarySearchT.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""arolla/util/binary_search.h""
+#include <cassert>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include ""absl/types/span.h""
+#include ""arolla/util/bits.h""
+#include ""arolla/util/switch_index.h""
+namespace arolla::binary_search_details {
+namespace {
+template <size_t kArraySize, typename T, class Predicate>
+size_t FastBinarySearchT(const T* const array, Predicate predicate) {
+  static_assert((kArraySize & (kArraySize + 1)) == 0);
+  size_t offset = 0;
+  for (size_t k = kArraySize; k > 0;) {
+    k >>= 1;
+    offset = (!predicate(array[offset + k]) ? offset + k + 1 : offset);
+  }
+  return offset;
+}
+template <typename T, typename Predicate>
+size_t BinarySearchT(absl::Span<const T> array, Predicate predicate) {
+  assert(!array.empty());
+  const int log2_size = BitScanReverse(array.size());
+  return switch_index<8 * sizeof(size_t)>(
+      log2_size, [array, predicate](auto constexpr_log2_size) {
+        constexpr size_t size =
+            (1ULL << static_cast<int>(constexpr_log2_size)) - 1;
+        size_t offset = 0;
+#if !defined(__clang__) && defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored ""-Warray-bounds""
+#endif
+        offset = (!predicate(array[size]) ? array.size() - size : offset);
+#if !defined(__clang__) && defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+        return offset +
+               FastBinarySearchT<size>(array.begin() + offset, predicate);
+      });
+}
+}  
+size_t LowerBoundImpl(float value, absl::Span<const float> array) {
+  return BinarySearchT(array, [value](auto arg) { return !(arg < value); });
+}
+size_t LowerBoundImpl(double value, absl::Span<const double> array) {
+  return BinarySearchT(array, [value](auto arg) { return !(arg < value); });
+}
+size_t LowerBoundImpl(int32_t value, absl::Span<const int32_t> array) {
+  return BinarySearchT(array, [value](auto arg) { return arg >= value; });
+}
+size_t LowerBoundImpl(int64_t value, absl::Span<const int64_t> array) {
+  return BinarySearchT(array, [value](auto arg) { return arg >= value; });
+}
+size_t UpperBoundImpl(float value, absl::Span<const float> array) {
+  if (std::isnan(value)) {
+    return array.size();
+  }
+  return BinarySearchT(array, [value](auto arg) { return !(arg <= value); });
+}
+size_t UpperBoundImpl(double value, absl::Span<const double> array) {
+  if (std::isnan(value)) {
+    return array.size();
+  }
+  return BinarySearchT(array, [value](auto arg) { return !(arg <= value); });
+}
+size_t UpperBoundImpl(int32_t value, absl::Span<const int32_t> array) {
+  return BinarySearchT(array, [value](auto arg) { return arg > value; });
+}
+size_t UpperBoundImpl(int64_t value, absl::Span<const int64_t> array) {
+  return BinarySearchT(array, [value](auto arg) { return arg > value; });
+}
+}  
+
+Return only Google Test code.
+"
+function_0045,JsonSame,datasets/extracted/functions/function_0045_JsonSame.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorstore/internal/json/same.h""
+#include <variant>
+#include ""absl/container/inlined_vector.h""
+#include <nlohmann/json.hpp>
+namespace tensorstore {
+namespace internal_json {
+bool JsonSame(const ::nlohmann::json& a, const ::nlohmann::json& b) {
+  using value_t = ::nlohmann::json::value_t;
+  using array_t = ::nlohmann::json::array_t;
+  using object_t = ::nlohmann::json::object_t;
+  struct ArrayIterators {
+    array_t::const_iterator a_cur, a_end, b_cur;
+  };
+  struct ObjectIterators {
+    object_t::const_iterator a_cur, a_end, b_cur;
+  };
+  using StackEntry = std::variant<ArrayIterators, ObjectIterators>;
+  absl::InlinedVector<StackEntry, 64> stack;
+  const auto compare_or_defer_values = [&](const ::nlohmann::json& a_value,
+                                           const ::nlohmann::json& b_value) {
+    const auto t = a_value.type();
+    switch (t) {
+      case value_t::discarded:
+      case value_t::null:
+        return b_value.type() == t;
+      case value_t::array: {
+        if (b_value.type() != t) return false;
+        const auto& a_arr = a_value.get_ref<const array_t&>();
+        const auto& b_arr = b_value.get_ref<const array_t&>();
+        if (a_arr.size() != b_arr.size()) return false;
+        if (a_arr.empty()) return true;
+        stack.emplace_back(
+            ArrayIterators{a_arr.begin(), a_arr.end(), b_arr.begin()});
+        return true;
+      }
+      case value_t::object: {
+        if (b_value.type() != t) return false;
+        const auto& a_obj = a_value.get_ref<const object_t&>();
+        const auto& b_obj = b_value.get_ref<const object_t&>();
+        if (a_obj.size() != b_obj.size()) return false;
+        if (a_obj.empty()) return true;
+        stack.emplace_back(
+            ObjectIterators{a_obj.begin(), a_obj.end(), b_obj.begin()});
+        return true;
+      }
+      default:
+        return a_value == b_value;
+    }
+  };
+  if (!compare_or_defer_values(a, b)) return false;
+  while (!stack.empty()) {
+    auto& e = stack.back();
+    if (auto* array_iterators = std::get_if<ArrayIterators>(&e)) {
+      auto& a_v = *array_iterators->a_cur;
+      auto& b_v = *array_iterators->b_cur;
+      if (++array_iterators->a_cur == array_iterators->a_end) {
+        stack.pop_back();
+      } else {
+        ++array_iterators->b_cur;
+      }
+      if (!compare_or_defer_values(a_v, b_v)) {
+        return false;
+      }
+    } else {
+      auto* object_iterators = std::get_if<ObjectIterators>(&e);
+      auto& a_kv = *object_iterators->a_cur;
+      auto& b_kv = *object_iterators->b_cur;
+      if (++object_iterators->a_cur == object_iterators->a_end) {
+        stack.pop_back();
+      } else {
+        ++object_iterators->b_cur;
+      }
+      if (a_kv.first != b_kv.first ||
+          !compare_or_defer_values(a_kv.second, b_kv.second)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_2729,Init,datasets/extracted/functions/function_2729_Init.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorstore/internal/compression/zlib.h""
+#include ""absl/base/optimization.h""
+#include ""absl/log/absl_check.h""
+#include ""absl/status/status.h""
+#include ""tensorstore/internal/compression/cord_stream_manager.h""
+#include <zlib.h>
+namespace tensorstore {
+namespace zlib {
+namespace {
+struct InflateOp {
+  static int Init(z_stream* s, [[maybe_unused]] int level, int header_option) {
+    return inflateInit2(s, 15 
+                               + header_option);
+  }
+  static int Process(z_stream* s, int flags) { return inflate(s, flags); }
+  static int Destroy(z_stream* s) { return inflateEnd(s); }
+  static constexpr bool kDataErrorPossible = true;
+};
+struct DeflateOp {
+  static int Init(z_stream* s, int level, int header_option) {
+    return deflateInit2(s, level, Z_DEFLATED,
+                        15 
+                            + header_option,
+                        8 ,
+                        Z_DEFAULT_STRATEGY);
+  }
+  static int Process(z_stream* s, int flags) { return deflate(s, flags); }
+  static int Destroy(z_stream* s) { return deflateEnd(s); }
+  static constexpr bool kDataErrorPossible = false;
+};
+template <typename Op>
+absl::Status ProcessZlib(const absl::Cord& input, absl::Cord* output, int level,
+                         bool use_gzip_header) {
+  z_stream s = {};
+  internal::CordStreamManager<z_stream, 16 * 1024>
+      stream_manager(s, input, output);
+  const int header_option = use_gzip_header ? 16 
+                                            : 0;
+  int err = Op::Init(&s, level, header_option);
+  if (err != Z_OK) {
+    ABSL_CHECK(false);
+  }
+  struct StreamDestroyer {
+    z_stream* s;
+    ~StreamDestroyer() { Op::Destroy(s); }
+  } stream_destroyer{&s};
+  while (true) {
+    const bool input_complete = stream_manager.FeedInputAndOutputBuffers();
+    err = Op::Process(&s, input_complete ? Z_FINISH : Z_NO_FLUSH);
+    const bool made_progress = stream_manager.HandleOutput();
+    if (err == Z_OK) continue;
+    if (err == Z_BUF_ERROR && made_progress) continue;
+    break;
+  }
+  switch (err) {
+    case Z_STREAM_END:
+      if (!stream_manager.has_input_remaining()) {
+        return absl::OkStatus();
+      }
+      [[fallthrough]];
+    case Z_NEED_DICT:
+    case Z_DATA_ERROR:
+    case Z_BUF_ERROR:
+      if (!Op::kDataErrorPossible) {
+        ABSL_CHECK(false);
+      }
+      return absl::InvalidArgumentError(""Error decoding zlib-compressed data"");
+    default:
+      ABSL_CHECK(false);
+  }
+  ABSL_UNREACHABLE();  
+}
+}  
+void Encode(const absl::Cord& input, absl::Cord* output,
+            const Options& options) {
+  ProcessZlib<DeflateOp>(input, output, options.level, options.use_gzip_header)
+      .IgnoreError();
+}
+absl::Status Decode(const absl::Cord& input, absl::Cord* output,
+                    bool use_gzip_header) {
+  return ProcessZlib<InflateOp>(input, output, 0, use_gzip_header);
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_2866,IsUpcastConvert,datasets/extracted/functions/function_2866_IsUpcastConvert.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/service/convert_operand_folding.h""
+#include ""absl/status/statusor.h""
+#include ""xla/hlo/ir/hlo_instruction.h""
+#include ""xla/hlo/ir/hlo_opcode.h""
+#include ""xla/primitive_util.h""
+#include ""xla/shape_util.h""
+#include ""xla/xla_data.pb.h""
+#include ""tsl/platform/errors.h""
+namespace xla {
+namespace {
+bool IsUpcastConvert(const HloInstruction* hlo) {
+  if (!hlo->shape().IsArray()) {
+    return false;
+  }
+  switch (hlo->opcode()) {
+    case HloOpcode::kDynamicSlice:
+    case HloOpcode::kGather:
+    case HloOpcode::kReshape:
+    case HloOpcode::kSlice:
+    case HloOpcode::kTranspose: {
+      return IsUpcastConvert(hlo->operand(0));
+    }
+    case HloOpcode::kReduce: {
+      if (ShapeUtil::ElementsIn(hlo->shape()) ==
+          ShapeUtil::ElementsIn(hlo->operand(0)->shape())) {
+        return IsUpcastConvert(hlo->operand(0));
+      }
+      return false;
+    }
+    case HloOpcode::kConvert:
+      return primitive_util::CastPreservesValues(
+          hlo->operand(0)->shape().element_type(), hlo->shape().element_type());
+    default:
+      return false;
+  }
+}
+HloInstruction* EffectiveOperand(HloInstruction* hlo) {
+  switch (hlo->opcode()) {
+    case HloOpcode::kBroadcast:
+    case HloOpcode::kDynamicSlice:
+    case HloOpcode::kGather:
+    case HloOpcode::kReshape:
+    case HloOpcode::kSlice:
+    case HloOpcode::kTranspose: {
+      HloInstruction* operand = EffectiveOperand(hlo->mutable_operand(0));
+      HloInstruction* clone = hlo->AddInstruction(hlo->Clone());
+      *(clone->mutable_shape()) = ShapeUtil::ChangeElementType(
+          clone->shape(), operand->shape().element_type());
+      clone->ReplaceOperandWithDifferentShape(0, operand).IgnoreError();
+      return clone;
+    }
+    case HloOpcode::kReduce: {
+      HloInstruction* operand = EffectiveOperand(hlo->mutable_operand(0));
+      return hlo->AddInstruction(HloInstruction::CreateReshape(
+          ShapeUtil::ChangeElementType(hlo->shape(),
+                                       operand->shape().element_type()),
+          operand));
+    }
+    case HloOpcode::kConvert:
+      return hlo->mutable_operand(0);
+    default:
+      return nullptr;
+  }
+}
+}  
+bool ConvertOperandFolding::InstructionMatchesPattern(
+    HloInstruction* instruction) {
+  if (instruction->opcode() != HloOpcode::kDot &&
+      instruction->opcode() != HloOpcode::kConvolution) {
+    return false;
+  }
+  for (auto* operand : instruction->operands()) {
+    if (IsUpcastConvert(operand)) {
+      return true;
+    }
+  }
+  return false;
+}
+absl::StatusOr<HloInstruction*> ConvertOperandFolding::ExpandInstruction(
+    HloInstruction* instruction) {
+  for (int i = 0; i < instruction->operand_count(); ++i) {
+    auto* operand = instruction->mutable_operand(i);
+    if (IsUpcastConvert(operand)) {
+      TF_RETURN_IF_ERROR(instruction->ReplaceOperandWithDifferentShape(
+          i, EffectiveOperand(operand)));
+    }
+  }
+  return nullptr;
+}
+}  
+
+Return only Google Test code.
+"
+function_1339,IsConstZeros,datasets/extracted/functions/function_1339_IsConstZeros.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/lite/delegates/gpu/common/transformations/make_padding.h""
+#include <any>
+#include <memory>
+#include <string>
+#include <vector>
+#include ""absl/types/any.h""
+#include ""tensorflow/lite/delegates/gpu/common/model.h""
+#include ""tensorflow/lite/delegates/gpu/common/model_transformer.h""
+#include ""tensorflow/lite/delegates/gpu/common/operations.h""
+#include ""tensorflow/lite/delegates/gpu/common/shape.h""
+#include ""tensorflow/lite/delegates/gpu/common/status.h""
+#include ""tensorflow/lite/delegates/gpu/common/tensor.h""
+namespace tflite {
+namespace gpu {
+namespace {
+bool IsConstZeros(const Node& node) {
+  if (node.operation.type != ToString(OperationType::CONSTANT)) {
+    return false;
+  }
+  auto& attr =
+      std::any_cast<const ConstTensorAttributes&>(node.operation.attributes);
+  for (auto f : attr.tensor.data) {
+    if (f != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+class MakePaddingFromZerosConcat : public NodeTransformation {
+ public:
+  TransformResult ApplyToNode(Node* node, GraphFloat32* graph) final {
+    if (node->operation.type != ToString(OperationType::CONCAT)) {
+      return {TransformStatus::SKIPPED, """"};
+    }
+    auto inputs = graph->FindInputs(node->id);
+    if (inputs.size() != 2) {
+      return {TransformStatus::SKIPPED, """"};
+    }
+    bool first = true;
+    for (auto input : inputs) {
+      auto dep = graph->FindProducer(input->id);
+      if (dep != nullptr && IsConstZeros(*dep)) {
+        auto& concat_attr =
+            std::any_cast<const ConcatAttributes&>(node->operation.attributes);
+        PadAttributes pad_attr;
+        pad_attr.type = PaddingContentType::ZEROS;
+        pad_attr.appended = BHWC(0, 0, 0, 0);
+        pad_attr.prepended = BHWC(0, 0, 0, 0);
+        BHWC* p = first ? &pad_attr.prepended : &pad_attr.appended;
+        switch (concat_attr.axis) {
+          case Axis::HEIGHT:
+            p->h = input->tensor.shape.h;
+            break;
+          case Axis::WIDTH:
+            p->w = input->tensor.shape.w;
+            break;
+          case Axis::CHANNELS:
+            p->c = input->tensor.shape.c;
+            break;
+          default:
+            return {TransformStatus::DECLINED,
+                    ""Padding for concat axis is unsupported: "" +
+                        ToString(concat_attr.axis)};
+        }
+        absl::Status status = RemovePrecedingNode(graph, dep, node);
+        if (!status.ok()) {
+          return {TransformStatus::INVALID, ""Unable to remove const node: "" +
+                                                std::string(status.message())};
+        }
+        node->operation.attributes = pad_attr;
+        node->operation.type = ToString(OperationType::PAD);
+        return {TransformStatus::APPLIED, ""Replaced concat with padding""};
+      }
+      first = false;
+    }
+    return {TransformStatus::SKIPPED, """"};
+  }
+};
+}  
+std::unique_ptr<NodeTransformation> NewMakePaddingFromConcat() {
+  return std::make_unique<MakePaddingFromZerosConcat>();
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_1718,Variant,datasets/extracted/functions/function_1718_Variant.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/lite/core/async/interop/variant.h""
+#include <cstring>
+#include <utility>
+namespace tflite {
+namespace interop {
+Variant::Variant() {
+  type = kInvalid;
+  val.i = 0;
+}
+bool Variant::operator==(const Variant& other) const {
+  if (type != other.type) return false;
+  switch (type) {
+    case kInvalid:
+      return true;
+    case kInt:
+      return val.i == other.val.i;
+    case kSizeT:
+      return val.s == other.val.s;
+    case kString:
+      return (val.c == other.val.c) || (strcmp(val.c, other.val.c) == 0);
+    case kBool:
+      return val.b == other.val.b;
+  }
+}
+bool Variant::operator!=(const Variant& other) const {
+  return !(*this == other);
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_1968,ToTensorflowAlgorithm,datasets/extracted/functions/function_1968_ToTensorflowAlgorithm.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/compiler/tf2xla/kernels/rng_converter_utils.h""
+#include ""absl/strings/string_view.h""
+#include ""tensorflow/compiler/tf2xla/xla_op_registry.h""
+#include ""xla/xla_data.pb.h""
+#include ""tensorflow/core/framework/rng_alg.h""
+namespace tensorflow {
+Algorithm ToTensorflowAlgorithm(xla::RandomAlgorithm alg) {
+  switch (alg) {
+    case xla::RandomAlgorithm::RNG_PHILOX:
+      return RNG_ALG_PHILOX;
+    case xla::RandomAlgorithm::RNG_THREE_FRY:
+      return RNG_ALG_THREEFRY;
+    case xla::RandomAlgorithm::RNG_DEFAULT:  
+    default:
+      return RNG_ALG_AUTO_SELECT;
+  }
+}
+xla::RandomAlgorithm DefaultRngAlgForDeviceType(
+    absl::string_view device_type_string) {
+  if (device_type_string == DEVICE_GPU_XLA_JIT ||
+      device_type_string == DEVICE_CPU_XLA_JIT) {
+    return xla::RandomAlgorithm::RNG_PHILOX;
+  } else {
+    return xla::RandomAlgorithm::RNG_DEFAULT;
+  }
+}
+}  
+
+Return only Google Test code.
+"
+function_2425,operator_,datasets/extracted/functions/function_2425_operator_.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""absl/base/log_severity.h""
+#include <ostream>
+#include ""absl/base/attributes.h""
+#include ""absl/base/config.h""
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+std::ostream& operator<<(std::ostream& os, absl::LogSeverity s) {
+  if (s == absl::NormalizeLogSeverity(s)) return os << absl::LogSeverityName(s);
+  return os << ""absl::LogSeverity("" << static_cast<int>(s) << "")"";
+}
+std::ostream& operator<<(std::ostream& os, absl::LogSeverityAtLeast s) {
+  switch (s) {
+    case absl::LogSeverityAtLeast::kInfo:
+    case absl::LogSeverityAtLeast::kWarning:
+    case absl::LogSeverityAtLeast::kError:
+    case absl::LogSeverityAtLeast::kFatal:
+      return os << "">="" << static_cast<absl::LogSeverity>(s);
+    case absl::LogSeverityAtLeast::kInfinity:
+      return os << ""INFINITY"";
+  }
+  return os;
+}
+std::ostream& operator<<(std::ostream& os, absl::LogSeverityAtMost s) {
+  switch (s) {
+    case absl::LogSeverityAtMost::kInfo:
+    case absl::LogSeverityAtMost::kWarning:
+    case absl::LogSeverityAtMost::kError:
+    case absl::LogSeverityAtMost::kFatal:
+      return os << ""<="" << static_cast<absl::LogSeverity>(s);
+    case absl::LogSeverityAtMost::kNegativeInfinity:
+      return os << ""NEGATIVE_INFINITY"";
+  }
+  return os;
+}
+ABSL_NAMESPACE_END
+}  
+
+Return only Google Test code.
+"
+function_2914,StringLikeSpan,datasets/extracted/functions/function_2914_StringLikeSpan.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#ifndef TENSORSTORE_INTERNAL_STRING_LIKE_H_
+#define TENSORSTORE_INTERNAL_STRING_LIKE_H_
+#include <cassert>
+#include <cstddef>
+#include <string>
+#include <string_view>
+#include ""absl/base/optimization.h""
+#include ""tensorstore/util/span.h""
+namespace tensorstore {
+namespace internal {
+template <typename T>
+constexpr inline bool IsStringLike = false;
+template <>
+constexpr inline bool IsStringLike<std::string_view> = true;
+template <>
+constexpr inline bool IsStringLike<std::string> = true;
+template <>
+constexpr inline bool IsStringLike<const char*> = true;
+class StringLikeSpan {
+ public:
+  StringLikeSpan() = default;
+  StringLikeSpan(tensorstore::span<const char* const> c_strings)
+      : c_strings_(c_strings.data()), size_and_tag_(c_strings.size() << 2) {}
+  StringLikeSpan(tensorstore::span<const std::string> strings)
+      : strings_(strings.data()), size_and_tag_((strings.size() << 2) | 1) {}
+  StringLikeSpan(tensorstore::span<const std::string_view> string_views)
+      : string_views_(string_views.data()),
+        size_and_tag_((string_views.size() << 2) | 2) {}
+  std::string_view operator[](ptrdiff_t i) const {
+    assert(i >= 0 && i < size());
+    switch (size_and_tag_ & 3) {
+      case 0:
+        return c_strings_[i];
+      case 1:
+        return strings_[i];
+      case 2:
+        return string_views_[i];
+      default:
+        ABSL_UNREACHABLE();  
+    }
+  }
+  ptrdiff_t size() const { return size_and_tag_ >> 2; }
+ private:
+  union {
+    const char* const* c_strings_;
+    const std::string* strings_;
+    const std::string_view* string_views_;
+  };
+  ptrdiff_t size_and_tag_ = 0;
+};
+}  
+}  
+#endif  
+
+Return only Google Test code.
+"
+function_0010,CopyState,datasets/extracted/functions/function_0010_CopyState.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""leveldb/status.h""
+#include <cstdio>
+#include ""port/port.h""
+namespace leveldb {
+const char* Status::CopyState(const char* state) {
+  uint32_t size;
+  std::memcpy(&size, state, sizeof(size));
+  char* result = new char[size + 5];
+  std::memcpy(result, state, size + 5);
+  return result;
+}
+Status::Status(Code code, const Slice& msg, const Slice& msg2) {
+  assert(code != kOk);
+  const uint32_t len1 = static_cast<uint32_t>(msg.size());
+  const uint32_t len2 = static_cast<uint32_t>(msg2.size());
+  const uint32_t size = len1 + (len2 ? (2 + len2) : 0);
+  char* result = new char[size + 5];
+  std::memcpy(result, &size, sizeof(size));
+  result[4] = static_cast<char>(code);
+  std::memcpy(result + 5, msg.data(), len1);
+  if (len2) {
+    result[5 + len1] = ':';
+    result[6 + len1] = ' ';
+    std::memcpy(result + 7 + len1, msg2.data(), len2);
+  }
+  state_ = result;
+}
+std::string Status::ToString() const {
+  if (state_ == nullptr) {
+    return ""OK"";
+  } else {
+    char tmp[30];
+    const char* type;
+    switch (code()) {
+      case kOk:
+        type = ""OK"";
+        break;
+      case kNotFound:
+        type = ""NotFound: "";
+        break;
+      case kCorruption:
+        type = ""Corruption: "";
+        break;
+      case kNotSupported:
+        type = ""Not implemented: "";
+        break;
+      case kInvalidArgument:
+        type = ""Invalid argument: "";
+        break;
+      case kIOError:
+        type = ""IO error: "";
+        break;
+      default:
+        std::snprintf(tmp, sizeof(tmp),
+                      ""Unknown code(%d): "", static_cast<int>(code()));
+        type = tmp;
+        break;
+    }
+    std::string result(type);
+    uint32_t length;
+    std::memcpy(&length, state_, sizeof(length));
+    result.append(state_ + 5, length);
+    return result;
+  }
+}
+}  
+
+Return only Google Test code.
+"
+function_2065,HloOpcodeString,datasets/extracted/functions/function_2065_HloOpcodeString.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/hlo/ir/hlo_opcode.h""
+#include <optional>
+#include <string>
+#include ""absl/container/flat_hash_map.h""
+#include ""xla/util.h""
+namespace xla {
+absl::string_view HloOpcodeString(HloOpcode opcode) {
+  switch (opcode) {
+#define CASE_OPCODE_STRING(enum_name, opcode_name, ...) \
+  case HloOpcode::enum_name:                            \
+    return opcode_name;
+    HLO_OPCODE_LIST(CASE_OPCODE_STRING)
+#undef CASE_OPCODE_STRING
+  }
+}
+absl::StatusOr<HloOpcode> StringToHloOpcode(absl::string_view opcode_name) {
+  static auto* opcode_map = new absl::flat_hash_map<std::string, HloOpcode>({
+#define STRING_TO_OPCODE_ENTRY(enum_name, opcode_name, ...) \
+  {opcode_name, HloOpcode::enum_name},
+      HLO_OPCODE_LIST(STRING_TO_OPCODE_ENTRY)
+#undef STRING_TO_OPCODE_ENTRY
+  });
+  auto it = opcode_map->find(opcode_name);
+  if (it == opcode_map->end()) {
+    return InvalidArgument(""Unknown opcode: %s"", opcode_name);
+  }
+  return it->second;
+}
+bool HloOpcodeIsComparison(HloOpcode opcode) {
+  return opcode == HloOpcode::kCompare;
+}
+bool HloOpcodeIsVariadic(HloOpcode opcode) {
+  switch (opcode) {
+#define CASE_IS_VARIADIC(enum_name, opcode_name, arity, ...) \
+  case HloOpcode::enum_name:                                 \
+    return arity == kHloOpcodeIsVariadic;
+    HLO_OPCODE_LIST(CASE_IS_VARIADIC)
+#undef CASE_IS_VARIADIC
+  }
+}
+std::optional<int> HloOpcodeArity(HloOpcode opcode) {
+  switch (opcode) {
+#define CASE_ARITY(enum_name, opcode_name, arity, ...)  \
+  case HloOpcode::enum_name:                            \
+    return arity == kHloOpcodeIsVariadic ? std::nullopt \
+                                         : std::make_optional(arity);
+    HLO_OPCODE_LIST(CASE_ARITY)
+#undef CASE_ARITY
+  }
+}
+bool HloOpcodeIsAsync(HloOpcode opcode) {
+  return opcode == HloOpcode::kAsyncStart ||
+         opcode == HloOpcode::kAsyncUpdate || opcode == HloOpcode::kAsyncDone;
+}
+}  
+
+Return only Google Test code.
+"
+function_3110,operator_,datasets/extracted/functions/function_3110_operator_.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""common/memory.h""
+#include <cstddef>
+#include <cstring>
+#include <new>
+#include <ostream>
+#include ""absl/base/no_destructor.h""
+#include ""absl/log/absl_check.h""
+#include ""absl/numeric/bits.h""
+#include ""google/protobuf/arena.h""
+namespace cel {
+std::ostream& operator<<(std::ostream& out,
+                         MemoryManagement memory_management) {
+  switch (memory_management) {
+    case MemoryManagement::kPooling:
+      return out << ""POOLING"";
+    case MemoryManagement::kReferenceCounting:
+      return out << ""REFERENCE_COUNTING"";
+  }
+}
+void* ReferenceCountingMemoryManager::Allocate(size_t size, size_t alignment) {
+  ABSL_DCHECK(absl::has_single_bit(alignment))
+      << ""alignment must be a power of 2: "" << alignment;
+  if (size == 0) {
+    return nullptr;
+  }
+  if (alignment <= __STDCPP_DEFAULT_NEW_ALIGNMENT__) {
+    return ::operator new(size);
+  }
+  return ::operator new(size, static_cast<std::align_val_t>(alignment));
+}
+bool ReferenceCountingMemoryManager::Deallocate(void* ptr, size_t size,
+                                                size_t alignment) noexcept {
+  ABSL_DCHECK(absl::has_single_bit(alignment))
+      << ""alignment must be a power of 2: "" << alignment;
+  if (ptr == nullptr) {
+    ABSL_DCHECK_EQ(size, 0);
+    return false;
+  }
+  ABSL_DCHECK_GT(size, 0);
+  if (alignment <= __STDCPP_DEFAULT_NEW_ALIGNMENT__) {
+#if defined(__cpp_sized_deallocation) && __cpp_sized_deallocation >= 201309L
+    ::operator delete(ptr, size);
+#else
+    ::operator delete(ptr);
+#endif
+  } else {
+#if defined(__cpp_sized_deallocation) && __cpp_sized_deallocation >= 201309L
+    ::operator delete(ptr, size, static_cast<std::align_val_t>(alignment));
+#else
+    ::operator delete(ptr, static_cast<std::align_val_t>(alignment));
+#endif
+  }
+  return true;
+}
+MemoryManager MemoryManager::Unmanaged() {
+  static absl::NoDestructor<google::protobuf::Arena> arena;
+  return MemoryManager::Pooling(&*arena);
+}
+}  
+
+Return only Google Test code.
+"
+function_0833,NcclBase,datasets/extracted/functions/function_0833_NcclBase.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/core/kernels/collective_nccl.h""
+#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#include ""tensorflow/core/common_runtime/collective_util.h""
+#include ""tensorflow/core/nccl/nccl_manager.h""
+#include ""tensorflow/core/profiler/lib/traceme.h""
+namespace tensorflow {
+NcclBase::NcclBase(CollectiveType type, const string& name)
+    : type_(type), name_(name), col_ctx_(nullptr), col_params_(nullptr) {}
+Status NcclBase::InitializeCollectiveParams(CollectiveParams* col_params) {
+  if (type_ != col_params->instance.type) {
+    return errors::Internal(""Expected initialized type "", type_,
+                            "" to match type in CollectiveParams "",
+                            col_params->instance.type);
+  }
+  const char* expected_name;
+  switch (type_) {
+    case REDUCTION_COLLECTIVE:
+      expected_name = ""NcclReduce"";
+      break;
+    case BROADCAST_COLLECTIVE:
+      expected_name = ""NcclBroadcast"";
+      break;
+    case GATHER_COLLECTIVE:
+      expected_name = ""NcclGather"";
+      break;
+    case REDUCE_SCATTER_COLLECTIVE:
+      expected_name = ""NcclReduceScatter"";
+      break;
+    case ALL_TO_ALL_COLLECTIVE:
+      expected_name = ""NcclAllToAll"";
+      break;
+    default:
+      return errors::Internal(""Unexpected CollectiveType "", type_);
+  }
+  if (expected_name != col_params->instance.impl_details.collective_name) {
+    return errors::Internal(""Unexpected combination of collective type "",
+                            col_params->instance.type, "" and collective name "",
+                            col_params->instance.impl_details.collective_name,
+                            "", expected name "", expected_name);
+  }
+  return OkStatus();
+}
+Status NcclBase::InitializeCollectiveContext(
+    std::shared_ptr<CollectiveContext> col_ctx) {
+  col_ctx_ = col_ctx;
+  col_params_ = col_ctx->col_params.get();
+  return collective_util::InitializeDeviceAndLocality(
+      col_ctx->dev_mgr, col_ctx->device_name, &col_ctx->device,
+      &col_ctx->device_locality);
+}
+}  
+#endif  
+
+Return only Google Test code.
+"
+function_1298,to_string,datasets/extracted/functions/function_1298_to_string.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorstore/open_mode.h""
+#include <ostream>
+#include ""absl/status/status.h""
+namespace tensorstore {
+std::string_view to_string(ReadWriteMode mode) {
+  switch (mode) {
+    case ReadWriteMode::dynamic:
+      return ""dynamic"";
+    case ReadWriteMode::read:
+      return ""read"";
+    case ReadWriteMode::write:
+      return ""write"";
+    case ReadWriteMode::read_write:
+      return ""read_write"";
+    default:
+      return ""<unknown>"";
+  }
+}
+std::ostream& operator<<(std::ostream& os, ReadWriteMode mode) {
+  return os << to_string(mode);
+}
+std::ostream& operator<<(std::ostream& os, OpenMode mode) {
+  const char* sep = """";
+  constexpr const char* kSep = ""|"";
+  if (!!(mode & OpenMode::open)) {
+    os << ""open"";
+    sep = kSep;
+  }
+  if (!!(mode & OpenMode::create)) {
+    os << sep << ""create"";
+    sep = kSep;
+  }
+  if (!!(mode & OpenMode::delete_existing)) {
+    os << sep << ""delete_existing"";
+    sep = kSep;
+  }
+  if (!!(mode & OpenMode::assume_metadata)) {
+    os << sep << ""assume_metadata"";
+    sep = kSep;
+  }
+  return os;
+}
+namespace internal {
+absl::Status ValidateSupportsRead(ReadWriteMode mode) {
+  return !(mode & ReadWriteMode::read)
+             ? absl::InvalidArgumentError(""Source does not support reading."")
+             : absl::Status();
+}
+absl::Status ValidateSupportsWrite(ReadWriteMode mode) {
+  return !(mode & ReadWriteMode::write)
+             ? absl::InvalidArgumentError(
+                   ""Destination does not support writing."")
+             : absl::Status();
+}
+absl::Status ValidateSupportsModes(ReadWriteMode mode,
+                                   ReadWriteMode required_modes) {
+  if ((mode & required_modes) != required_modes) {
+    if (!!(required_modes & ReadWriteMode::read) &&
+        !(mode & ReadWriteMode::read)) {
+      return absl::InvalidArgumentError(""Read mode not supported"");
+    }
+    if (!!(required_modes & ReadWriteMode::write) &&
+        !(mode & ReadWriteMode::write)) {
+      return absl::InvalidArgumentError(""Write mode not supported"");
+    }
+  }
+  return absl::OkStatus();
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_0480,MaybeInferShape,datasets/extracted/functions/function_0480_MaybeInferShape.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/service/result_caster.h""
+#include <optional>
+#include ""absl/status/statusor.h""
+#include ""xla/hlo/ir/hlo_casting_utils.h""
+#include ""xla/hlo/ir/hlo_instruction.h""
+#include ""xla/hlo/ir/hlo_instructions.h""
+#include ""xla/hlo/ir/hlo_opcode.h""
+#include ""xla/service/shape_inference.h""
+#include ""xla/shape.h""
+#include ""xla/shape_util.h""
+namespace xla {
+namespace {
+absl::StatusOr<std::optional<Shape>> MaybeInferShape(
+    const HloInstruction* instruction) {
+  switch (instruction->opcode()) {
+    case HloOpcode::kDot:
+      return ShapeInference::InferDotOpShape(
+          instruction->operand(0)->shape(), instruction->operand(1)->shape(),
+          instruction->dot_dimension_numbers(),
+          std::nullopt,
+          Cast<HloDotInstruction>(instruction)->sparsity());
+    case HloOpcode::kConvolution:
+      return ShapeInference::InferConvolveShape(
+          instruction->operand(0)->shape(), instruction->operand(1)->shape(),
+          instruction->feature_group_count(), instruction->batch_group_count(),
+          instruction->window(), instruction->convolution_dimension_numbers(),
+          std::nullopt);
+    default:
+      return std::optional<Shape>(std::nullopt);
+  }
+}
+}  
+bool ResultCaster::InstructionMatchesPattern(HloInstruction* instruction) {
+  auto status_or_inferred_shape = MaybeInferShape(instruction);
+  if (!status_or_inferred_shape.ok() ||
+      !status_or_inferred_shape->has_value()) {
+    return false;
+  }
+  const Shape& inferred_shape = status_or_inferred_shape.value().value();
+  return inferred_shape.element_type() != instruction->shape().element_type() &&
+         ShapeUtil::HigherPrecisionElementType(inferred_shape,
+                                               instruction->shape()) ==
+             inferred_shape.element_type();
+}
+absl::StatusOr<HloInstruction*> ResultCaster::ExpandInstruction(
+    HloInstruction* instruction) {
+  auto* computation = instruction->parent();
+  Shape inferred_shape = MaybeInferShape(instruction).value().value();
+  *inferred_shape.mutable_layout() = instruction->shape().layout();
+  auto clone = computation->AddInstruction(
+      instruction->CloneWithNewShape(inferred_shape));
+  return computation->AddInstruction(
+      HloInstruction::CreateConvert(instruction->shape(), clone));
+}
+}  
+
+Return only Google Test code.
+"
+function_0737,PrefetchAutotuner,datasets/extracted/functions/function_0737_PrefetchAutotuner.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/core/kernels/data/prefetch_autotuner.h""
+#include <cstdint>
+#include ""tensorflow/core/data/dataset_utils.h""
+#include ""tensorflow/core/framework/model.h""
+namespace tensorflow {
+namespace data {
+PrefetchAutotuner::PrefetchAutotuner(
+    int64_t initial_buffer_size, int64_t buffer_size_min,
+    std::shared_ptr<model::RamBudgetManager> ram_budget_manager)
+    : buffer_limit_(initial_buffer_size),
+      ram_budget_manager_(ram_budget_manager) {
+  if (initial_buffer_size == model::kAutotune) {
+    mode_ = Mode::kUpswing;
+    buffer_limit_ = std::max(int64_t{1}, buffer_size_min);
+  }
+}
+namespace {
+size_t kBufferLimitThreshold = 2048;
+}  
+void PrefetchAutotuner::SetElementSize(int64_t element_size_bytes) {
+  if (ram_budget_manager_ && !ram_budget_manager_->RequestLegacyPrefetchBytes(
+                                 element_size_bytes * buffer_limit_)) {
+    LOG(WARNING)
+        << ""Prefetch autotuner tried to allocate ""
+        << element_size_bytes * buffer_limit_ << "" bytes ""
+        << ""after encountering the first element of size "" << element_size_bytes
+        << "" bytes.""
+        << ""This already causes the autotune ram budget to be exceeded. To ""
+        << ""stay within the ram budget, either increase the ram budget or ""
+        << ""reduce element size"";
+  }
+  element_size_bytes_ = element_size_bytes;
+}
+void PrefetchAutotuner::RecordConsumption(size_t current_buffer_size) {
+  switch (mode_) {
+    case Mode::kDisabled:
+      return;
+    case Mode::kUpswing:
+      if (static_cast<int64_t>(current_buffer_size) == buffer_limit_) {
+        mode_ = Mode::kDownswing;
+      }
+      return;
+    case Mode::kDownswing:
+      if (current_buffer_size == 0) {
+        if (!element_size_bytes_.has_value()) {
+          return;
+        }
+        int64_t element_size_bytes = *element_size_bytes_;
+        int64_t attempt_new_buffer_limit;
+        if (buffer_limit_ >= static_cast<int64_t>(kBufferLimitThreshold)) {
+          attempt_new_buffer_limit = buffer_limit_ + kBufferLimitThreshold;
+        } else {
+          attempt_new_buffer_limit = buffer_limit_ * 2;
+        }
+        int64_t delta_bytes =
+            (attempt_new_buffer_limit - buffer_limit_) * element_size_bytes;
+        if (!ram_budget_manager_ ||
+            ram_budget_manager_->RequestLegacyPrefetchBytes(delta_bytes)) {
+          buffer_limit_ = attempt_new_buffer_limit;
+        }
+        mode_ = Mode::kUpswing;
+      }
+      return;
+  }
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_0656,TfTensorView,datasets/extracted/functions/function_0656_TfTensorView.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/lite/kernels/shim/tf_tensor_view.h""
+#include <utility>
+#include ""absl/status/status.h""
+#include ""absl/status/statusor.h""
+#include ""tensorflow/core/framework/types.pb.h""
+#define CASE_FOR_DTYPE_GIVEN_CPP_DTYPE(TF_DTYPE, CPP_DTYPE) \
+  case TF_DTYPE: {                                          \
+    using DType = typename CPP_DTYPE;                       \
+    return TfTensorView(wrapped_tensor, DType());           \
+  }
+#define CASE_FOR_DTYPE(TF_DTYPE)           \
+  CASE_FOR_DTYPE_GIVEN_CPP_DTYPE(TF_DTYPE, \
+                                 ::tensorflow::EnumToDataType<TF_DTYPE>::Type)
+namespace tflite {
+namespace shim {
+TfTensorView::TfTensorView(TfTensorView &&o) noexcept
+    : TensorView(std::move(o)), shape_data_(std::move(o.shape_data_)) {
+  shape_ = absl::Span<int>(shape_data_);
+}
+TfTensorView::TfTensorView(const TfTensorView &o)
+    : TensorView(o), shape_data_(o.shape_data_) {
+  shape_ = absl::Span<int>(shape_data_);
+}
+TfTensorView &TfTensorView::operator=(TfTensorView &&o) noexcept {
+  shape_data_ = std::move(o.shape_data_);
+  TensorView::operator=(std::move(o));
+  shape_ = absl::Span<int>(shape_data_);
+  return *this;
+}
+TfTensorView &TfTensorView::operator=(const TfTensorView &o) {
+  if (&o == this) return *this;
+  TensorView::operator=(o);
+  shape_data_ = o.shape_data_;
+  shape_ = absl::Span<int>(shape_data_);
+  return *this;
+}
+template <typename TfTensorType>
+absl::StatusOr<typename MatchConstNess<TfTensorType, TfTensorView>::Type>
+TfTensorViewTemplatizedNew(TfTensorType *wrapped_tensor) {
+  switch (wrapped_tensor->dtype()) {
+    CASE_FOR_DTYPE(::tensorflow::DT_BOOL);
+    CASE_FOR_DTYPE(::tensorflow::DT_UINT8);
+    CASE_FOR_DTYPE(::tensorflow::DT_UINT64);
+    CASE_FOR_DTYPE(::tensorflow::DT_INT8);
+    CASE_FOR_DTYPE(::tensorflow::DT_INT16);
+    CASE_FOR_DTYPE(::tensorflow::DT_INT32);
+    CASE_FOR_DTYPE_GIVEN_CPP_DTYPE(::tensorflow::DT_INT64, std::int64_t);
+    CASE_FOR_DTYPE(::tensorflow::DT_FLOAT);
+    CASE_FOR_DTYPE(::tensorflow::DT_DOUBLE);
+    CASE_FOR_DTYPE(::tensorflow::DT_STRING);
+    default: {
+      return absl::UnimplementedError(
+          absl::StrCat(""Unsupported data type: "", wrapped_tensor->dtype()));
+    }
+  }
+}
+template <>
+absl::StatusOr<TfTensorView> TensorView::New<::tensorflow::Tensor>(
+    ::tensorflow::Tensor *wrapped_tensor) {
+  return TfTensorViewTemplatizedNew(wrapped_tensor);
+}
+template <>
+absl::StatusOr<const TfTensorView> TensorView::New<const ::tensorflow::Tensor>(
+    const ::tensorflow::Tensor *wrapped_tensor) {
+  return TfTensorViewTemplatizedNew(wrapped_tensor);
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_1907,ParsedJsonValue,datasets/extracted/functions/function_1907_ParsedJsonValue.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""common/values/parsed_json_value.h""
+#include <string>
+#include <utility>
+#include ""absl/base/attributes.h""
+#include ""absl/functional/overload.h""
+#include ""absl/status/status.h""
+#include ""absl/strings/cord.h""
+#include ""absl/strings/str_cat.h""
+#include ""absl/strings/string_view.h""
+#include ""absl/types/variant.h""
+#include ""common/allocator.h""
+#include ""common/memory.h""
+#include ""common/value.h""
+#include ""internal/well_known_types.h""
+#include ""google/protobuf/message.h""
+namespace cel::common_internal {
+namespace {
+using ::cel::well_known_types::AsVariant;
+using ::cel::well_known_types::GetValueReflectionOrDie;
+}  
+Value ParsedJsonValue(Allocator<> allocator,
+                      Borrowed<const google::protobuf::Message> message) {
+  const auto reflection = GetValueReflectionOrDie(message->GetDescriptor());
+  const auto kind_case = reflection.GetKindCase(*message);
+  switch (kind_case) {
+    case google::protobuf::Value::KIND_NOT_SET:
+      ABSL_FALLTHROUGH_INTENDED;
+    case google::protobuf::Value::kNullValue:
+      return NullValue();
+    case google::protobuf::Value::kBoolValue:
+      return BoolValue(reflection.GetBoolValue(*message));
+    case google::protobuf::Value::kNumberValue:
+      return DoubleValue(reflection.GetNumberValue(*message));
+    case google::protobuf::Value::kStringValue: {
+      std::string scratch;
+      return absl::visit(
+          absl::Overload(
+              [&](absl::string_view string) -> StringValue {
+                if (string.empty()) {
+                  return StringValue();
+                }
+                if (string.data() == scratch.data() &&
+                    string.size() == scratch.size()) {
+                  return StringValue(allocator, std::move(scratch));
+                } else {
+                  return StringValue(message, string);
+                }
+              },
+              [&](absl::Cord&& cord) -> StringValue {
+                if (cord.empty()) {
+                  return StringValue();
+                }
+                return StringValue(std::move(cord));
+              }),
+          AsVariant(reflection.GetStringValue(*message, scratch)));
+    }
+    case google::protobuf::Value::kListValue:
+      return ParsedJsonListValue(Owned<const google::protobuf::Message>(
+          Owner(message), &reflection.GetListValue(*message)));
+    case google::protobuf::Value::kStructValue:
+      return ParsedJsonMapValue(Owned<const google::protobuf::Message>(
+          Owner(message), &reflection.GetStructValue(*message)));
+    default:
+      return ErrorValue(absl::InvalidArgumentError(
+          absl::StrCat(""unexpected value kind case: "", kind_case)));
+  }
+}
+}  
+
+Return only Google Test code.
+"
+function_1222,convertToValidationFailureType,datasets/extracted/functions/function_1222_convertToValidationFailureType.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/lite/tools/delegates/compatibility/gpu/gpu_delegate_compatibility_checker.h""
+#include <functional>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include ""absl/status/status.h""
+#include ""tensorflow/lite/model_builder.h""
+#include ""tensorflow/lite/tools/delegates/compatibility/protos/compatibility_result.pb.h""
+#include ""tensorflow/lite/tools/versioning/gpu_compatibility.h""
+#include ""tensorflow/lite/tools/versioning/op_signature.h""
+namespace tflite {
+namespace tools {
+namespace {
+void convertToValidationFailureType(absl::Status status,
+                                    proto::OpCompatibilityResult* op_result) {
+  auto compatibility_failure = op_result->add_compatibility_failures();
+  compatibility_failure->set_description(std::string(status.message()));
+  switch (status.code()) {
+    case absl::StatusCode::kInvalidArgument:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_INVALID_ARGUMENT);
+      break;
+    case absl::StatusCode::kUnimplemented:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_UNIMPLEMENTED_ERROR);
+      break;
+    case absl::StatusCode::kInternal:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_INTERNAL_ERROR);
+      break;
+    case absl::StatusCode::kOutOfRange:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_OUT_OF_RANGE);
+      break;
+    default:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_INTERNAL_ERROR);
+      compatibility_failure->set_description(
+          ""Unknown validation failure type."");
+  }
+}
+}  
+std::unordered_map<std::string, std::string>
+tools::GpuDelegateCompatibilityChecker::getDccConfigurations() {
+  return {};
+}
+absl::Status tools::GpuDelegateCompatibilityChecker::setDccConfigurations(
+    const std::unordered_map<std::string, std::string>& dcc_configs) {
+  return absl::OkStatus();
+}
+absl::Status
+tools::GpuDelegateCompatibilityChecker::checkModelCompatibilityOnline(
+    tflite::FlatBufferModel* model_buffer,
+    tflite::proto::CompatibilityResult* result) {
+  return absl::UnimplementedError(
+      ""Online mode is not supported on GPU delegate compatibility checker."");
+}
+absl::Status tools::GpuDelegateCompatibilityChecker::checkOpSigCompatibility(
+    const OpSignature& op_sig,
+    tflite::proto::OpCompatibilityResult* op_result) {
+  auto status = CheckGpuDelegateCompatibility(op_sig);
+  if (!status.ok()) {
+    convertToValidationFailureType(status, op_result);
+    op_result->set_is_supported(false);
+  } else {
+    op_result->set_is_supported(true);
+  }
+  return absl::OkStatus();
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_0131,IsWellKnownMessageType,datasets/extracted/functions/function_0131_IsWellKnownMessageType.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include <string>
+#include ""absl/base/attributes.h""
+#include ""absl/base/nullability.h""
+#include ""absl/base/optimization.h""
+#include ""absl/log/absl_check.h""
+#include ""absl/strings/str_cat.h""
+#include ""common/type.h""
+#include ""google/protobuf/descriptor.h""
+namespace cel {
+using google::protobuf::Descriptor;
+bool IsWellKnownMessageType(absl::Nonnull<const Descriptor*> descriptor) {
+  switch (descriptor->well_known_type()) {
+    case Descriptor::WELLKNOWNTYPE_BOOLVALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_INT32VALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_INT64VALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_UINT32VALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_UINT64VALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_FLOATVALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_DOUBLEVALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_BYTESVALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_STRINGVALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_ANY:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_DURATION:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_TIMESTAMP:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_VALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_LISTVALUE:
+      ABSL_FALLTHROUGH_INTENDED;
+    case Descriptor::WELLKNOWNTYPE_STRUCT:
+      return true;
+    default:
+      return false;
+  }
+}
+std::string MessageType::DebugString() const {
+  if (ABSL_PREDICT_TRUE(static_cast<bool>(*this))) {
+    static_assert(sizeof(descriptor_) == 8 || sizeof(descriptor_) == 4,
+                  ""sizeof(void*) is neither 8 nor 4"");
+    return absl::StrCat(name(), ""@0x"",
+                        absl::Hex(descriptor_, sizeof(descriptor_) == 8
+                                                   ? absl::PadSpec::kZeroPad16
+                                                   : absl::PadSpec::kZeroPad8));
+  }
+  return std::string();
+}
+std::string MessageTypeField::DebugString() const {
+  if (ABSL_PREDICT_TRUE(static_cast<bool>(*this))) {
+    static_assert(sizeof(descriptor_) == 8 || sizeof(descriptor_) == 4,
+                  ""sizeof(void*) is neither 8 nor 4"");
+    return absl::StrCat(""["", (*this)->number(), ""]"", (*this)->name(), ""@0x"",
+                        absl::Hex(descriptor_, sizeof(descriptor_) == 8
+                                                   ? absl::PadSpec::kZeroPad16
+                                                   : absl::PadSpec::kZeroPad8));
+  }
+  return std::string();
+}
+Type MessageTypeField::GetType() const {
+  ABSL_DCHECK(*this);
+  return Type::Field(descriptor_);
+}
+}  
+
+Return only Google Test code.
+"
+function_2406,CreateDcnMessageFromStats,datasets/extracted/functions/function_2406_CreateDcnMessageFromStats.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/core/profiler/convert/dcn_utils.h""
+#include ""absl/strings/match.h""
+#include ""absl/strings/string_view.h""
+#include ""xla/tsl/profiler/utils/xplane_schema.h""
+#include ""xla/tsl/profiler/utils/xplane_visitor.h""
+namespace tensorflow {
+namespace profiler {
+namespace {
+using tsl::profiler::MicroToNano;
+using tsl::profiler::StatType;
+using tsl::profiler::XEventVisitor;
+using tsl::profiler::XStatVisitor;
+DcnMessage CreateDcnMessageFromStats(const XEventVisitor& event_visitor) {
+  DcnMessage dcn_message;
+  event_visitor.ForEachStat([&](const XStatVisitor& stat) {
+    if (!stat.Type()) return;
+    switch (static_cast<StatType>(*stat.Type())) {
+      case StatType::kDcnLabel: {
+        dcn_message.collective_name = stat.ToString();
+        break;
+      }
+      case StatType::kDcnSourceSliceId: {
+        dcn_message.slice_src = stat.IntValue();
+        break;
+      }
+      case StatType::kDcnSourcePerSliceDeviceId: {
+        dcn_message.tpu_src = stat.IntValue();
+        break;
+      }
+      case StatType::kDcnDestinationSliceId: {
+        dcn_message.slice_dst = stat.IntValue();
+        break;
+      }
+      case StatType::kDcnDestinationPerSliceDeviceId: {
+        dcn_message.tpu_dst = stat.IntValue();
+        break;
+      }
+      case StatType::kDcnChunk: {
+        dcn_message.chunk_id = stat.IntValue();
+        break;
+      }
+      case StatType::kDcnLoopIndex: {
+        dcn_message.loop_index_id = stat.IntValue();
+        break;
+      }
+      case StatType::kPayloadSizeBytes: {
+        dcn_message.size_bytes = stat.IntValue();
+        break;
+      }
+      case StatType::kDuration: {
+        dcn_message.duration_us = stat.IntOrUintValue();
+        dcn_message.start_timestamp_ns =
+            event_visitor.TimestampNs() - MicroToNano(dcn_message.duration_us);
+        dcn_message.end_timestamp_ns = event_visitor.TimestampNs();
+        break;
+      }
+      default:
+        break;
+    }
+  });
+  return dcn_message;
+}
+void SetMessageValidity(DcnMessage& dcn_message) {
+  if (dcn_message.collective_name.empty() || dcn_message.slice_src == -1 ||
+      dcn_message.tpu_src == -1 || dcn_message.slice_dst == -1 ||
+      dcn_message.tpu_dst == -1 || dcn_message.size_bytes == -1) {
+    dcn_message.validity_info = DCN_MESSAGE_INVALID_BAD_KEY;
+  } else if (dcn_message.duration_us == 0) {
+    dcn_message.validity_info = DCN_MESSAGE_INVALID_CLOCK_SKEW;
+  } else if (dcn_message.slice_src == dcn_message.slice_dst) {
+    dcn_message.validity_info = DCN_MESSAGE_VALID_LOOPBACK;
+  } else {
+    dcn_message.validity_info = DCN_MESSAGE_VALID;
+  }
+}
+}  
+DcnMessage GetDcnMessageFromXEvent(const XEventVisitor& event_visitor) {
+  DcnMessage dcn_message = CreateDcnMessageFromStats(event_visitor);
+  SetMessageValidity(dcn_message);
+  return dcn_message;
+}
+bool IsDcnEvent(const tsl::profiler::XEventVisitor& event) {
+  return absl::StartsWith(event.Name(), ""MegaScale:"");
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_1255,Prepare,datasets/extracted/functions/function_1255_Prepare.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/lite/core/c/common.h""
+#include ""tensorflow/lite/kernels/internal/common.h""
+#include ""tensorflow/lite/kernels/internal/reference/integer_ops/lut.h""
+#include ""tensorflow/lite/kernels/internal/tensor.h""
+#include ""tensorflow/lite/kernels/kernel_util.h""
+namespace tflite {
+namespace ops {
+namespace custom {
+namespace table {
+constexpr int kInputTensor = 0;
+constexpr int kTable = 1;
+constexpr int kOutputTensor = 0;
+TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
+  TF_LITE_ENSURE_EQ(context, NumInputs(node), 2);
+  TF_LITE_ENSURE_EQ(context, NumOutputs(node), 1);
+  const TfLiteTensor* input;
+  TF_LITE_ENSURE_OK(context, GetInputSafe(context, node, kInputTensor, &input));
+  const TfLiteTensor* table;
+  TF_LITE_ENSURE_OK(context, GetInputSafe(context, node, kTable, &table));
+  TfLiteTensor* output;
+  TF_LITE_ENSURE_OK(context,
+                    GetOutputSafe(context, node, kOutputTensor, &output));
+  TF_LITE_ENSURE(context,
+                 input->type == kTfLiteInt8 || input->type == kTfLiteInt16);
+  TF_LITE_ENSURE_TYPES_EQ(context, input->type, output->type);
+  TF_LITE_ENSURE_TYPES_EQ(context, output->type, table->type);
+  if (input->type == kTfLiteInt16) {
+    TF_LITE_ENSURE_EQ(context, input->params.zero_point, 0);
+    TF_LITE_ENSURE_EQ(context, output->params.zero_point, 0);
+  }
+  TF_LITE_ENSURE_EQ(context, NumDimensions(table), 1);
+  if (input->type == kTfLiteInt8) {
+    TF_LITE_ENSURE_EQ(context, NumElements(table), LUTSize<int8_t>());
+  } else {
+    TF_LITE_ENSURE_EQ(context, input->type, kTfLiteInt16);
+    TF_LITE_ENSURE_EQ(context, NumElements(table), LUTSize<int16_t>());
+  }
+  return context->ResizeTensor(context, output,
+                               TfLiteIntArrayCopy(input->dims));
+}
+TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
+  const TfLiteTensor* input;
+  TF_LITE_ENSURE_OK(context, GetInputSafe(context, node, kInputTensor, &input));
+  const TfLiteTensor* table;
+  TF_LITE_ENSURE_OK(context, GetInputSafe(context, node, kTable, &table));
+  TfLiteTensor* output;
+  TF_LITE_ENSURE_OK(context,
+                    GetOutputSafe(context, node, kOutputTensor, &output));
+  switch (input->type) {
+    case kTfLiteInt8:
+      reference_integer_ops::LookupTable(
+          GetTensorData<int8_t>(input),
+          MatchingFlatSize(GetTensorShape(input), GetTensorShape(output)),
+          GetTensorData<int8_t>(table), GetTensorData<int8_t>(output));
+      return kTfLiteOk;
+    case kTfLiteInt16:
+      reference_integer_ops::LookupTable(
+          GetTensorData<int16_t>(input),
+          MatchingFlatSize(GetTensorShape(input), GetTensorShape(output)),
+          GetTensorData<int16_t>(table), GetTensorData<int16_t>(output));
+      return kTfLiteOk;
+    default:
+      TF_LITE_UNSUPPORTED_TYPE(context, input->type, ""Table"");
+  }
+  return kTfLiteOk;
+}
+}  
+TfLiteRegistration* Register_TABLE() {
+  static TfLiteRegistration r = {nullptr, nullptr, table::Prepare, table::Eval};
+  return &r;
+}
+}  
+}  
+}  
+
+Return only Google Test code.
+"
+function_0640,GetCurrentHloPassMetadata,datasets/extracted/functions/function_0640_GetCurrentHloPassMetadata.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/hlo/ir/hlo_module_metadata.h""
+#include <algorithm>
+#include ""absl/container/flat_hash_set.h""
+#include ""absl/log/log.h""
+#include ""xla/util.h""
+#include ""tsl/platform/env.h""
+#include ""tsl/platform/protobuf.h""
+namespace xla {
+absl::StatusOr<HloPassMetadata*>
+HloModuleMetadata::GetCurrentHloPassMetadata() {
+  if (running_passes_.empty()) {
+    return NotFound(
+        ""HloPassMetadata for currently running pass not found, either because ""
+        ""the pass did not call RecordPassStart or because a pass is ""
+        ""creating/switching modules without using ""
+        ""HloModuleGroup::ReplaceModule."");
+  }
+  return running_passes_.back();
+}
+absl::Status HloModuleMetadata::MutateCurrentHloPassMetadata(
+    absl::FunctionRef<void(HloPassMetadata*)> mutator) {
+  TF_ASSIGN_OR_RETURN(HloPassMetadata * pass_metadata,
+                      GetCurrentHloPassMetadata());
+  mutator(pass_metadata);
+  return absl::OkStatus();
+}
+void HloModuleMetadata::RecordPassStart() {
+  HloPassMetadata* pass_metadata = module_metadata_.add_pass_metadata();
+  pass_metadata->set_pass_id(next_pass_id_++);
+  pass_metadata->set_start_timestamp_usec(env_->NowMicros());
+  running_passes_.push_back(pass_metadata);
+}
+absl::Status HloModuleMetadata::RecordPassEnd() {
+  TF_ASSIGN_OR_RETURN(HloPassMetadata * pass_metadata,
+                      GetCurrentHloPassMetadata());
+  pass_metadata->set_end_timestamp_usec(env_->NowMicros());
+  running_passes_.pop_back();
+  return absl::OkStatus();
+}
+void HloModuleMetadata::set_prepartitioning_metadata(
+    const HloModuleMetadata& prepartitioning_metadata) {
+  module_metadata_.set_original_module_id(
+      prepartitioning_metadata.proto().canonical_module_id());
+  prepartitioning_metadata_ = prepartitioning_metadata.proto();
+  prepartitioning_metadata_->clear_pass_metadata();
+  absl::flat_hash_set<HloPassMetadata*> running_passes(
+      prepartitioning_metadata.running_passes_.begin(),
+      prepartitioning_metadata.running_passes_.end());
+  for (const HloPassMetadata& pass_metadata :
+       prepartitioning_metadata.proto().pass_metadata()) {
+    if (running_passes.contains(&pass_metadata)) {
+      HloPassMetadata* added_pass_metadata =
+          module_metadata_.add_pass_metadata();
+      *added_pass_metadata = pass_metadata;
+      running_passes_.push_back(added_pass_metadata);
+      next_pass_id_ =
+          std::max(next_pass_id_,
+                   static_cast<int64_t>(added_pass_metadata->pass_id()) + 1);
+    } else {
+      *prepartitioning_metadata_->add_pass_metadata() = pass_metadata;
+    }
+  }
+}
+absl::Status HloModuleMetadata::set_custom_metadata(
+    const ::tsl::protobuf::Message& message) {
+  TF_ASSIGN_OR_RETURN(HloPassMetadata * pass_metadata,
+                      GetCurrentHloPassMetadata());
+  if (!pass_metadata->mutable_custom_metadata()->PackFrom(message)) {
+    LOG(WARNING) << ""failed to pack custom metadata for ""
+                 << pass_metadata->pass_id();
+    return Internal(""failed to pack custom metadata"");
+  };
+  return absl::OkStatus();
+}
+}  
+
+Return only Google Test code.
+"
+function_2264,RandomStandardNormalSample,datasets/extracted/functions/function_2264_RandomStandardNormalSample.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include <cmath>
+#include <random>
+#include ""tensorflow/lite/core/c/common.h""
+#include ""tensorflow/lite/kernels/internal/tensor_ctypes.h""
+#include ""tensorflow/lite/kernels/kernel_util.h""
+namespace tflite {
+namespace ops {
+namespace custom {
+namespace random_standard_normal {
+struct OpData {
+  std::default_random_engine rng;
+};
+namespace {
+constexpr int kShapeTensor = 0;
+constexpr int kOutputTensor = 0;
+template <typename T>
+TfLiteStatus RandomStandardNormalSample(std::default_random_engine& rng,
+                                        T* output, size_t output_size) {
+  std::normal_distribution<T> dist;
+  std::generate(output, output + output_size, [&]() { return dist(rng); });
+  return kTfLiteOk;
+}
+}  
+void* Init(TfLiteContext* context, const char* buffer, size_t length) {
+  return new OpData();
+}
+void Free(TfLiteContext* context, void* buffer) {
+  delete reinterpret_cast<OpData*>(buffer);
+}
+TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
+  TF_LITE_ENSURE(context, NumInputs(node) == 1);
+  TF_LITE_ENSURE_EQ(context, NumOutputs(node), 1);
+  const TfLiteTensor* shape = GetInput(context, node, kShapeTensor);
+  TF_LITE_ENSURE_EQ(context, shape->type, kTfLiteInt32);
+  TF_LITE_ENSURE_EQ(context, NumDimensions(shape), 1);
+  TfLiteTensor* output = GetOutput(context, node, kOutputTensor);
+  if (!IsConstantOrPersistentTensor(shape)) {
+    SetTensorToDynamic(output);
+    return kTfLiteOk;
+  }
+  TfLiteIntArray* output_shape;
+  TF_LITE_ENSURE_OK(context,
+                    GetOutputShapeFromInput(context, shape, &output_shape));
+  return context->ResizeTensor(context, output, output_shape);
+}
+TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
+  OpData* params = reinterpret_cast<OpData*>(node->user_data);
+  TF_LITE_ENSURE(context, params != nullptr);
+  TfLiteTensor* output = GetOutput(context, node, kOutputTensor);
+  if (IsDynamicTensor(output)) {
+    const TfLiteTensor* shape = GetInput(context, node, kShapeTensor);
+    TfLiteIntArray* output_shape;
+    TF_LITE_ENSURE_OK(context,
+                      GetOutputShapeFromInput(context, shape, &output_shape));
+    TF_LITE_ENSURE_OK(context,
+                      context->ResizeTensor(context, output, output_shape));
+  }
+  const size_t output_size = NumElements(output);
+  switch (output->type) {
+    case kTfLiteFloat32:
+      RandomStandardNormalSample<float>(
+          params->rng, GetTensorData<float>(output), output_size);
+      break;
+    case kTfLiteFloat64:
+      RandomStandardNormalSample<double>(
+          params->rng, GetTensorData<double>(output), output_size);
+      break;
+    default:
+      TF_LITE_KERNEL_LOG(
+          context, ""Unsupported output datatype for RandomStandardNormal: %s"",
+          TfLiteTypeGetName(output->type));
+      return kTfLiteError;
+  }
+  return kTfLiteOk;
+}
+}  
+TfLiteRegistration* Register_RANDOM_STANDARD_NORMAL() {
+  static TfLiteRegistration r = {
+      random_standard_normal::Init, random_standard_normal::Free,
+      random_standard_normal::Prepare, random_standard_normal::Eval};
+  return &r;
+}
+}  
+}  
+}  
+
+Return only Google Test code.
+"
+function_0141,switch,datasets/extracted/functions/function_0141_switch.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/service/gpu/gpu_float_support.h""
+#include <utility>
+#include <variant>
+#include ""absl/log/check.h""
+#include ""xla/hlo/ir/hlo_instruction.h""
+#include ""xla/hlo/ir/hlo_instructions.h""
+#include ""xla/hlo/ir/hlo_opcode.h""
+#include ""xla/service/float_support.h""
+#include ""xla/service/gpu/fusions/triton/triton_support.h""
+#include ""xla/stream_executor/device_description.h""
+#include ""xla/xla_data.pb.h""
+namespace xla {
+namespace gpu {
+bool GpuFloatSupport::SupportsMixedPrecisions(const HloInstruction& hlo) const {
+  if (FloatSupport::SupportsMixedPrecisions(hlo)) return true;
+  switch (hlo.opcode()) {
+    case HloOpcode::kDot: {
+      CHECK_GE(hlo.operand_count(), HloDotInstruction::kOperands);
+      const PrimitiveType lhs_type = hlo.operand(0)->shape().element_type();
+      const PrimitiveType rhs_type = hlo.operand(1)->shape().element_type();
+      const PrimitiveType result_type = hlo.shape().element_type();
+      return (lhs_type == F16 && rhs_type == F16 && result_type == F32) ||
+             (lhs_type == BF16 && rhs_type == BF16 && result_type == F32);
+    }
+    default:
+      return false;
+  }
+}
+bool GpuFloatSupport::IsSupported(const HloInstruction& hlo) const {
+  switch (hlo.opcode()) {
+    case HloOpcode::kAllReduce:
+    case HloOpcode::kAllReduceStart:
+    case HloOpcode::kAllReduceDone:
+    case HloOpcode::kReduceScatter:
+    case HloOpcode::kDot:
+      using TypeAndCC = std::pair<
+          PrimitiveType,
+          stream_executor::CudaComputeCapability::CudaComputeCapabilities>;
+      for (auto [type, cc] :
+           {TypeAndCC(F8E4M3FN, se::CudaComputeCapability::AMPERE),
+            TypeAndCC(F8E5M2, se::CudaComputeCapability::HOPPER)}) {
+        if (LowPrecisionType() == type) {
+          auto* cuda_compute_capability =
+              std::get_if<se::CudaComputeCapability>(&compute_capability_);
+          return cuda_compute_capability &&
+                 cuda_compute_capability->IsAtLeast(cc) &&
+                 IsTritonFusedComputation(*hlo.parent());
+        }
+      }
+      return LowPrecisionType() == BF16;
+    case HloOpcode::kAllGather:
+    case HloOpcode::kAllToAll:
+    case HloOpcode::kBroadcast:
+    case HloOpcode::kCollectivePermute:
+    case HloOpcode::kConcatenate:
+    case HloOpcode::kCopy:
+    case HloOpcode::kDynamicSlice:
+    case HloOpcode::kDynamicUpdateSlice:
+    case HloOpcode::kGather:
+    case HloOpcode::kPad:
+    case HloOpcode::kReshape:
+    case HloOpcode::kReverse:
+    case HloOpcode::kScatter:
+    case HloOpcode::kSelect:
+    case HloOpcode::kSelectAndScatter:
+    case HloOpcode::kSlice:
+    case HloOpcode::kTranspose:
+    case HloOpcode::kBitcast:
+      return true;
+    case HloOpcode::kAdd:
+    case HloOpcode::kSubtract:
+    case HloOpcode::kMultiply: {
+      if (LowPrecisionType() == BF16) {
+        auto* cuda_compute_capability =
+            std::get_if<se::CudaComputeCapability>(&compute_capability_);
+        return cuda_compute_capability != nullptr &&
+               cuda_compute_capability->IsAtLeastHopper();
+      }
+      return false;
+    }
+    default:
+      return false;
+  }
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_2390,IsInOrderArch,datasets/extracted/functions/function_2390_IsInOrderArch.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/lite/experimental/acceleration/mini_benchmark/big_little_affinity.h""
+#include <algorithm>
+#include <cstdint>
+#include <map>
+#include <set>
+#include ""include/cpuinfo.h""
+namespace tflite {
+namespace acceleration {
+namespace {
+bool IsInOrderArch(cpuinfo_uarch arch) {
+  switch (arch) {
+    case cpuinfo_uarch_cortex_a53:
+    case cpuinfo_uarch_cortex_a55r0:
+    case cpuinfo_uarch_cortex_a55:
+    case cpuinfo_uarch_cortex_a57:
+      return true;
+    default:
+      return false;
+  }
+  return false;
+}
+}  
+BigLittleAffinity GetAffinity() {
+  BigLittleAffinity affinity;
+  if (!cpuinfo_initialize()) {
+    return affinity;
+  }
+  std::map<uint32_t, uint64_t> cluster_to_max_frequency;
+  uint64_t smallest_max_frequency = UINT64_MAX;
+  uint64_t largest_max_frequency = 0;
+  uint64_t processors_count = cpuinfo_get_processors_count();
+  for (auto i = 0; i < processors_count; i++) {
+    const struct cpuinfo_processor* processor = cpuinfo_get_processor(i);
+    if (processor->core->frequency > 0) {
+      cluster_to_max_frequency[processor->cluster->cluster_id] =
+          processor->core->frequency;
+      smallest_max_frequency =
+          std::min(smallest_max_frequency, processor->core->frequency);
+      largest_max_frequency =
+          std::max(largest_max_frequency, processor->core->frequency);
+    }
+  }
+  int count_of_processors_with_largest_max_frequency = 0;
+  for (auto i = 0; i < cpuinfo_get_processors_count(); i++) {
+    const struct cpuinfo_processor* processor = cpuinfo_get_processor(i);
+    uint64_t max_frequency =
+        cluster_to_max_frequency[processor->cluster->cluster_id];
+    if (max_frequency == largest_max_frequency) {
+      ++count_of_processors_with_largest_max_frequency;
+    }
+  }
+  std::set<cpuinfo_uarch> archs;
+  for (auto i = 0; i < cpuinfo_get_processors_count(); i++) {
+    const struct cpuinfo_processor* processor = cpuinfo_get_processor(i);
+    uint64_t max_frequency =
+        cluster_to_max_frequency[processor->cluster->cluster_id];
+    bool is_little;
+    archs.insert(processor->core->uarch);
+    if (count_of_processors_with_largest_max_frequency ==
+        cpuinfo_get_processors_count()) {
+      is_little = IsInOrderArch(processor->core->uarch);
+    } else if (count_of_processors_with_largest_max_frequency == 2) {
+      is_little = (max_frequency != largest_max_frequency);
+    } else {
+      is_little = (max_frequency == smallest_max_frequency);
+    }
+#ifdef __ANDROID__
+    if (is_little) {
+      affinity.little_core_affinity |= (0x1 << processor->linux_id);
+    } else {
+      affinity.big_core_affinity |= (0x1 << processor->linux_id);
+    }
+#endif  
+  }
+  if (cluster_to_max_frequency.size() == 1) {
+    affinity.big_core_affinity = affinity.little_core_affinity =
+        std::max(affinity.big_core_affinity, affinity.little_core_affinity);
+  } else if (count_of_processors_with_largest_max_frequency ==
+                 cpuinfo_get_processors_count() &&
+             archs.size() == 1) {
+    affinity.big_core_affinity = affinity.little_core_affinity =
+        std::max(affinity.big_core_affinity, affinity.little_core_affinity);
+  }
+  return affinity;
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_1053,Run,datasets/extracted/functions/function_1053_Run.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/service/dynamic_index_splitter.h""
+#include <map>
+#include ""absl/container/flat_hash_map.h""
+#include ""absl/container/flat_hash_set.h""
+#include ""absl/container/inlined_vector.h""
+#include ""xla/hlo/ir/hlo_casting_utils.h""
+#include ""xla/hlo/ir/hlo_computation.h""
+#include ""xla/hlo/ir/hlo_instruction.h""
+#include ""xla/hlo/ir/hlo_instructions.h""
+#include ""xla/hlo/ir/hlo_opcode.h""
+#include ""xla/shape_util.h""
+namespace xla {
+absl::StatusOr<bool> DynamicIndexSplitter::Run(
+    HloModule* module,
+    const absl::flat_hash_set<absl::string_view>& execution_threads) {
+  bool changed = false;
+  std::vector<HloComputation*> computations =
+      module->MakeNonfusionComputations(execution_threads);
+  for (HloComputation* computation : computations) {
+    for (HloInstruction* dynamic_op : computation->MakeInstructionPostOrder()) {
+      switch (dynamic_op->opcode()) {
+        case HloOpcode::kDynamicSlice:
+        case HloOpcode::kDynamicUpdateSlice:
+          break;
+        default:
+          continue;
+      }
+      auto parent = dynamic_op->parent();
+      bool is_update = dynamic_op->opcode() == HloOpcode::kDynamicUpdateSlice;
+      int64_t num_indices = dynamic_op->operand(0)->shape().rank();
+      if (num_indices == 0) {
+        if (is_update) {
+          TF_CHECK_OK(parent->ReplaceInstruction(
+              dynamic_op, dynamic_op->mutable_operand(1)));
+        } else {
+          TF_CHECK_OK(parent->ReplaceInstruction(
+              dynamic_op, dynamic_op->mutable_operand(0)));
+        }
+        changed = true;
+        continue;
+      }
+      int64_t index_operand_number =
+          Cast<HloDynamicIndexInstruction>(dynamic_op)
+              ->first_index_operand_number();
+      auto index_operand = dynamic_op->mutable_operand(index_operand_number);
+      if (ShapeUtil::IsScalar(index_operand->shape())) {
+        continue;
+      }
+      TF_RET_CHECK(index_operand->shape().rank() == 1);
+      auto index_element_type = index_operand->shape().element_type();
+      std::vector<HloInstruction*> index_array;
+      index_array.reserve(num_indices);
+      for (int64_t dim = 0; dim < num_indices; ++dim) {
+        auto slice = parent->AddInstruction(HloInstruction::CreateSlice(
+            ShapeUtil::MakeShape(index_element_type, {1}), index_operand, {dim},
+            {dim + 1}, {1}));
+        auto bitcast = parent->AddInstruction(HloInstruction::CreateReshape(
+            ShapeUtil::MakeShape(index_element_type, {}), slice));
+        index_array.push_back(bitcast);
+      }
+      auto new_dynamic_op =
+          is_update
+              ? HloInstruction::CreateDynamicUpdateSlice(
+                    dynamic_op->shape(), dynamic_op->mutable_operand(0),
+                    dynamic_op->mutable_operand(1), absl::MakeSpan(index_array))
+              : HloInstruction::CreateDynamicSlice(
+                    dynamic_op->shape(), dynamic_op->mutable_operand(0),
+                    absl::MakeSpan(index_array),
+                    dynamic_op->dynamic_slice_sizes());
+      TF_CHECK_OK(parent->ReplaceWithNewInstruction(dynamic_op,
+                                                    std::move(new_dynamic_op)));
+      changed = true;
+    }
+  }
+  return changed;
+}
+}  
+
+Return only Google Test code.
+"
+function_2955,IsAllowedS4U4CustomCall,datasets/extracted/functions/function_2955_IsAllowedS4U4CustomCall.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/service/cpu_gpu_shape_verifier.h""
+#include <array>
+#include <string_view>
+#include ""absl/algorithm/container.h""
+#include ""absl/base/attributes.h""
+#include ""absl/status/status.h""
+#include ""absl/strings/str_format.h""
+#include ""xla/hlo/ir/hlo_instruction.h""
+#include ""xla/hlo/ir/hlo_opcode.h""
+#include ""xla/layout_util.h""
+#include ""xla/primitive_util.h""
+#include ""xla/service/hlo_verifier.h""
+#include ""xla/shape.h""
+#include ""xla/shape_util.h""
+#include ""tsl/platform/errors.h""
+namespace xla {
+namespace {
+bool IsAllowedS4U4CustomCall(const HloInstruction* instruction) {
+  static constexpr std::array<std::string_view, 1> kMetadataCustomCalls = {
+      ""Sharding"",
+  };
+  return absl::c_any_of(kMetadataCustomCalls, [&](std::string_view target) {
+    return target == instruction->custom_call_target();
+  });
+}
+absl::Status VerifyS4U4Usage(HloInstruction* instruction) {
+  auto verify_subshape = [](const HloInstruction* instruction) {
+    return ShapeUtil::ForEachSubshapeWithStatus(
+        instruction->shape(), [&](const Shape& shape, const ShapeIndex&) {
+          if (primitive_util::IsSubByteNonPredType(shape.element_type())) {
+            return absl::InvalidArgumentError(absl::StrFormat(
+                ""%s is currently only supported in allow-listed instructions, ""
+                ""but got instruction: %s"",
+                primitive_util::LowercasePrimitiveTypeName(
+                    shape.element_type()),
+                instruction->ToString()));
+          }
+          return absl::OkStatus();
+        });
+  };
+  switch (instruction->opcode()) {
+    case HloOpcode::kBitcast:
+    case HloOpcode::kBroadcast:
+    case HloOpcode::kCall:
+    case HloOpcode::kConstant:
+    case HloOpcode::kConcatenate:
+    case HloOpcode::kConvert:
+    case HloOpcode::kCopy:
+    case HloOpcode::kDynamicSlice:
+    case HloOpcode::kDynamicUpdateSlice:
+    case HloOpcode::kFusion:
+    case HloOpcode::kGetTupleElement:
+    case HloOpcode::kParameter:
+    case HloOpcode::kSlice:
+    case HloOpcode::kTuple:
+    case HloOpcode::kWhile:
+      break;
+    case HloOpcode::kCustomCall:
+      if (IsAllowedS4U4CustomCall(instruction)) {
+        break;
+      }
+      ABSL_FALLTHROUGH_INTENDED;
+    default:
+      return verify_subshape(instruction);
+  }
+  return absl::OkStatus();
+}
+}  
+absl::Status CpuGpuShapeVerifier::Preprocess(HloInstruction* hlo) {
+  TF_RETURN_IF_ERROR(ShapeUtil::ForEachSubshapeWithStatus(
+      hlo->shape(), [&](const Shape& shape, const ShapeIndex&) {
+        if (shape.has_layout()) {
+          if (LayoutUtil::IsSparseArray(shape)) {
+            return absl::InvalidArgumentError(absl::StrFormat(
+                ""The XLA CPU/GPU backend does not support sparse shapes: %s"",
+                hlo->ToString()));
+          }
+          if (!primitive_util::IsSubByteNonPredType(shape.element_type()) &&
+              shape.layout().element_size_in_bits() != 0) {
+            return absl::InvalidArgumentError(absl::StrFormat(
+                ""The XLA CPU/GPU backend does not support custom element sizes ""
+                ""on non-sub-byte-bit types: %s"",
+                hlo->ToString()));
+          }
+        }
+        return absl::OkStatus();
+      }));
+  TF_RETURN_IF_ERROR(VerifyS4U4Usage(hlo));
+  return ShapeVerifier::Preprocess(hlo);
+}
+}  
+
+Return only Google Test code.
+"
+function_2678,ConsumeUnboundConversionNoInline,datasets/extracted/functions/function_2678_ConsumeUnboundConversionNoInline.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""absl/strings/internal/str_format/parser.h""
+#include <assert.h>
+#include <string.h>
+#include <wchar.h>
+#include <cctype>
+#include <cstdint>
+#include <algorithm>
+#include <initializer_list>
+#include <limits>
+#include <ostream>
+#include <string>
+#include <unordered_set>
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace str_format_internal {
+constexpr ConvTag ConvTagHolder::value[256];
+ABSL_ATTRIBUTE_NOINLINE const char* ConsumeUnboundConversionNoInline(
+    const char* p, const char* end, UnboundConversion* conv, int* next_arg) {
+  return ConsumeUnboundConversion(p, end, conv, next_arg);
+}
+std::string LengthModToString(LengthMod v) {
+  switch (v) {
+    case LengthMod::h:
+      return ""h"";
+    case LengthMod::hh:
+      return ""hh"";
+    case LengthMod::l:
+      return ""l"";
+    case LengthMod::ll:
+      return ""ll"";
+    case LengthMod::L:
+      return ""L"";
+    case LengthMod::j:
+      return ""j"";
+    case LengthMod::z:
+      return ""z"";
+    case LengthMod::t:
+      return ""t"";
+    case LengthMod::q:
+      return ""q"";
+    case LengthMod::none:
+      return """";
+  }
+  return """";
+}
+struct ParsedFormatBase::ParsedFormatConsumer {
+  explicit ParsedFormatConsumer(ParsedFormatBase *parsedformat)
+      : parsed(parsedformat), data_pos(parsedformat->data_.get()) {}
+  bool Append(string_view s) {
+    if (s.empty()) return true;
+    size_t text_end = AppendText(s);
+    if (!parsed->items_.empty() && !parsed->items_.back().is_conversion) {
+      parsed->items_.back().text_end = text_end;
+    } else {
+      parsed->items_.push_back({false, text_end, {}});
+    }
+    return true;
+  }
+  bool ConvertOne(const UnboundConversion &conv, string_view s) {
+    size_t text_end = AppendText(s);
+    parsed->items_.push_back({true, text_end, conv});
+    return true;
+  }
+  size_t AppendText(string_view s) {
+    memcpy(data_pos, s.data(), s.size());
+    data_pos += s.size();
+    return static_cast<size_t>(data_pos - parsed->data_.get());
+  }
+  ParsedFormatBase *parsed;
+  char* data_pos;
+};
+ParsedFormatBase::ParsedFormatBase(
+    string_view format, bool allow_ignored,
+    std::initializer_list<FormatConversionCharSet> convs)
+    : data_(format.empty() ? nullptr : new char[format.size()]) {
+  has_error_ = !ParseFormatString(format, ParsedFormatConsumer(this)) ||
+               !MatchesConversions(allow_ignored, convs);
+}
+bool ParsedFormatBase::MatchesConversions(
+    bool allow_ignored,
+    std::initializer_list<FormatConversionCharSet> convs) const {
+  std::unordered_set<int> used;
+  auto add_if_valid_conv = [&](int pos, char c) {
+    if (static_cast<size_t>(pos) > convs.size() ||
+        !Contains(convs.begin()[pos - 1], c))
+      return false;
+    used.insert(pos);
+    return true;
+  };
+  for (const ConversionItem &item : items_) {
+    if (!item.is_conversion) continue;
+    auto &conv = item.conv;
+    if (conv.precision.is_from_arg() &&
+        !add_if_valid_conv(conv.precision.get_from_arg(), '*'))
+      return false;
+    if (conv.width.is_from_arg() &&
+        !add_if_valid_conv(conv.width.get_from_arg(), '*'))
+      return false;
+    if (!add_if_valid_conv(conv.arg_position,
+                           FormatConversionCharToChar(conv.conv)))
+      return false;
+  }
+  return used.size() == convs.size() || allow_ignored;
+}
+}  
+ABSL_NAMESPACE_END
+}  
+
+Return only Google Test code.
+"
+function_0476,ROTL,datasets/extracted/functions/function_0476_ROTL.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""tensorflow/core/kernels/random_index_shuffle.h""
+#include <assert.h>
+#include <algorithm>
+#include <array>
+#include <bitset>
+#include <cmath>
+#include ""tensorflow/core/platform/types.h""
+namespace tensorflow {
+namespace random {
+constexpr int kMinBlockSize = 16;
+namespace impl {
+#define ROTL(x, r, W) (((x) << (r)) | (x >> (W - (r))))
+#define ROTR(x, r, W) (((x) >> (r)) | ((x) << (W - (r))))
+#define SIMON_F(x, W) ((ROTL(x, 1, W) & ROTL(x, 8, W) ^ ROTL(x, 2, W)))
+#define SIMON_Rx2(x, y, k1, k2, W) \
+  (y ^= SIMON_F(x, W), y ^= k1, x ^= SIMON_F(y, W), x ^= k2)
+template <int W>
+std::vector<std::bitset<W>> simon_key_schedule(
+    const std::array<uint32_t, 3>& key, const int32_t rounds) {
+  static_assert(W >= 8, ""Minimum word size is 8 bits."");
+  const auto c = std::bitset<W>(0xfffffffc);
+  auto z = std::bitset<W>(0x7369f885192c0ef5LL);
+  std::vector<std::bitset<W>> rk({key[0], key[1], key[2]});
+  rk.reserve(rounds);
+  for (int i = 3; i < rounds; i++) {
+    rk.push_back(c ^ (z & std::bitset<W>(1)) ^ rk[i - 3] ^
+                 ROTR(rk[i - 1], 3, W) ^ ROTR(rk[i - 1], 4, W));
+    z >>= 1;
+  }
+  return rk;
+}
+template <int W>
+uint64_t simon_encrypt(const uint64_t value,
+                       const std::vector<std::bitset<W>>& round_keys) {
+  static_assert(W >= 8, ""Minimum word size is 8 bits."");
+  std::bitset<W> left(value >> W);
+  std::bitset<W> right(value);
+  for (int i = 0; i < round_keys.size();) {
+    SIMON_Rx2(right, left, round_keys[i++], round_keys[i++], W);
+  }
+  return (left.to_ullong() << W) | right.to_ullong();
+}
+template <int B>
+uint64_t index_shuffle(const uint64_t index, const std::array<uint32_t, 3>& key,
+                       const uint64_t max_index, const int32_t rounds) {
+  const auto round_keys = simon_key_schedule<B / 2>(key, rounds);
+  uint64_t new_index = index;
+  while (true) {
+    new_index = simon_encrypt<B / 2>(new_index, round_keys);
+    if (new_index <= max_index) {
+      return new_index;
+    }
+  }
+}
+#undef ROTL
+#undef ROTR
+#undef SIMON_F
+#undef SIMON_RxC
+}  
+uint64_t index_shuffle(const uint64_t index, const std::array<uint32_t, 3>& key,
+                       const uint64_t max_index, const int32_t rounds) {
+  int block_size = static_cast<int>(std::ceil(std::log2(max_index)));
+  block_size = std::max(block_size + block_size % 2, kMinBlockSize);
+  assert(block_size > 0 && block_size % 2 == 0 && block_size <= 64);
+  assert(rounds >= 4 && rounds % 2 == 0);
+#define HANDLE_BLOCK_SIZE(B) \
+  case B:                    \
+    return impl::index_shuffle<B>(index, key, max_index, rounds);
+  switch (block_size) {
+    HANDLE_BLOCK_SIZE(16);
+    HANDLE_BLOCK_SIZE(18);
+    HANDLE_BLOCK_SIZE(20);
+    HANDLE_BLOCK_SIZE(22);
+    HANDLE_BLOCK_SIZE(24);
+    HANDLE_BLOCK_SIZE(26);
+    HANDLE_BLOCK_SIZE(28);
+    HANDLE_BLOCK_SIZE(30);
+    HANDLE_BLOCK_SIZE(32);
+    HANDLE_BLOCK_SIZE(34);
+    HANDLE_BLOCK_SIZE(36);
+    HANDLE_BLOCK_SIZE(38);
+    HANDLE_BLOCK_SIZE(40);
+    HANDLE_BLOCK_SIZE(42);
+    HANDLE_BLOCK_SIZE(44);
+    HANDLE_BLOCK_SIZE(46);
+    HANDLE_BLOCK_SIZE(48);
+    HANDLE_BLOCK_SIZE(50);
+    HANDLE_BLOCK_SIZE(52);
+    HANDLE_BLOCK_SIZE(54);
+    HANDLE_BLOCK_SIZE(56);
+    HANDLE_BLOCK_SIZE(58);
+    HANDLE_BLOCK_SIZE(60);
+    HANDLE_BLOCK_SIZE(62);
+    default:
+      return impl::index_shuffle<64>(index, key, max_index, rounds);
+  }
+#undef HANDLE_BLOCK_SIZE
+}
+}  
+}  
+
+Return only Google Test code.
+"
+function_2446,CalculateBase64EscapedLenInternal,datasets/extracted/functions/function_2446_CalculateBase64EscapedLenInternal.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""absl/strings/internal/escaping.h""
+#include <limits>
+#include ""absl/base/internal/endian.h""
+#include ""absl/base/internal/raw_logging.h""
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace strings_internal {
+ABSL_CONST_INIT const char kBase64Chars[] =
+    ""ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"";
+ABSL_CONST_INIT const char kWebSafeBase64Chars[] =
+    ""ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"";
+size_t CalculateBase64EscapedLenInternal(size_t input_len, bool do_padding) {
+  constexpr size_t kMaxSize = (std::numeric_limits<size_t>::max() - 1) / 4 * 3;
+  ABSL_INTERNAL_CHECK(input_len <= kMaxSize,
+                      ""CalculateBase64EscapedLenInternal() overflow"");
+  size_t len = (input_len / 3) * 4;
+  if (input_len % 3 == 0) {
+  } else if (input_len % 3 == 1) {
+    len += 2;
+    if (do_padding) {
+      len += 2;
+    }
+  } else {  
+    len += 3;
+    if (do_padding) {
+      len += 1;
+    }
+  }
+  return len;
+}
+size_t Base64EscapeInternal(const unsigned char* src, size_t szsrc, char* dest,
+                            size_t szdest, const char* base64,
+                            bool do_padding) {
+  static const char kPad64 = '=';
+  if (szsrc * 4 > szdest * 3) return 0;
+  char* cur_dest = dest;
+  const unsigned char* cur_src = src;
+  char* const limit_dest = dest + szdest;
+  const unsigned char* const limit_src = src + szsrc;
+  if (szsrc >= 3) {                    
+    while (cur_src < limit_src - 3) {  
+      uint32_t in = absl::big_endian::Load32(cur_src) >> 8;
+      cur_dest[0] = base64[in >> 18];
+      in &= 0x3FFFF;
+      cur_dest[1] = base64[in >> 12];
+      in &= 0xFFF;
+      cur_dest[2] = base64[in >> 6];
+      in &= 0x3F;
+      cur_dest[3] = base64[in];
+      cur_dest += 4;
+      cur_src += 3;
+    }
+  }
+  szdest = static_cast<size_t>(limit_dest - cur_dest);
+  szsrc = static_cast<size_t>(limit_src - cur_src);
+  switch (szsrc) {
+    case 0:
+      break;
+    case 1: {
+      if (szdest < 2) return 0;
+      uint32_t in = cur_src[0];
+      cur_dest[0] = base64[in >> 2];
+      in &= 0x3;
+      cur_dest[1] = base64[in << 4];
+      cur_dest += 2;
+      szdest -= 2;
+      if (do_padding) {
+        if (szdest < 2) return 0;
+        cur_dest[0] = kPad64;
+        cur_dest[1] = kPad64;
+        cur_dest += 2;
+        szdest -= 2;
+      }
+      break;
+    }
+    case 2: {
+      if (szdest < 3) return 0;
+      uint32_t in = absl::big_endian::Load16(cur_src);
+      cur_dest[0] = base64[in >> 10];
+      in &= 0x3FF;
+      cur_dest[1] = base64[in >> 4];
+      in &= 0x00F;
+      cur_dest[2] = base64[in << 2];
+      cur_dest += 3;
+      szdest -= 3;
+      if (do_padding) {
+        if (szdest < 1) return 0;
+        cur_dest[0] = kPad64;
+        cur_dest += 1;
+        szdest -= 1;
+      }
+      break;
+    }
+    case 3: {
+      if (szdest < 4) return 0;
+      uint32_t in =
+          (uint32_t{cur_src[0]} << 16) + absl::big_endian::Load16(cur_src + 1);
+      cur_dest[0] = base64[in >> 18];
+      in &= 0x3FFFF;
+      cur_dest[1] = base64[in >> 12];
+      in &= 0xFFF;
+      cur_dest[2] = base64[in >> 6];
+      in &= 0x3F;
+      cur_dest[3] = base64[in];
+      cur_dest += 4;
+      szdest -= 4;
+      break;
+    }
+    default:
+      ABSL_RAW_LOG(FATAL, ""Logic problem? szsrc = %zu"", szsrc);
+      break;
+  }
+  return static_cast<size_t>(cur_dest - dest);
+}
+}  
+ABSL_NAMESPACE_END
+}  
+
+Return only Google Test code.
+"
+function_2825,operator_,datasets/extracted/functions/function_2825_operator_.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""arolla/expr/expr_node.h""
+#include <cstddef>
+#include <deque>
+#include <memory>
+#include <ostream>
+#include <string>
+#include <utility>
+#include <vector>
+#include ""absl/base/no_destructor.h""
+#include ""absl/cleanup/cleanup.h""
+#include ""absl/log/check.h""
+#include ""absl/strings/string_view.h""
+#include ""arolla/expr/expr_attributes.h""
+#include ""arolla/expr/expr_operator.h""
+#include ""arolla/qtype/typed_value.h""
+#include ""arolla/util/fingerprint.h""
+namespace arolla::expr {
+std::ostream& operator<<(std::ostream& os, ExprNodeType t) {
+  switch (t) {
+    case expr::ExprNodeType::kLiteral: {
+      return os << ""kLiteral"";
+    }
+    case expr::ExprNodeType::kLeaf: {
+      return os << ""kLeaf"";
+    }
+    case expr::ExprNodeType::kOperator: {
+      return os << ""kOperator"";
+    }
+    case expr::ExprNodeType::kPlaceholder: {
+      return os << ""kPlaceholder"";
+    }
+  }
+  return os << ""ExprNodeType("" << static_cast<int>(t) << "")"";
+}
+ExprNodePtr ExprNode::MakeLiteralNode(TypedValue&& qvalue) {
+  FingerprintHasher hasher(""LiteralNode"");
+  hasher.Combine(qvalue.GetFingerprint());
+  auto self = std::make_unique<ExprNode>(PrivateConstructorTag());
+  self->type_ = ExprNodeType::kLiteral;
+  self->attr_ = ExprAttributes(std::move(qvalue));
+  self->fingerprint_ = std::move(hasher).Finish();
+  return ExprNodePtr::Own(std::move(self));
+}
+ExprNodePtr ExprNode::MakeLeafNode(absl::string_view leaf_key) {
+  auto self = std::make_unique<ExprNode>(PrivateConstructorTag());
+  self->type_ = ExprNodeType::kLeaf;
+  self->leaf_key_ = std::string(leaf_key);
+  self->fingerprint_ = FingerprintHasher(""LeafNode"").Combine(leaf_key).Finish();
+  return ExprNodePtr::Own(std::move(self));
+}
+ExprNodePtr ExprNode::MakePlaceholderNode(absl::string_view placeholder_key) {
+  auto self = std::make_unique<ExprNode>(PrivateConstructorTag());
+  self->type_ = ExprNodeType::kPlaceholder;
+  self->placeholder_key_ = std::string(placeholder_key);
+  self->fingerprint_ =
+      FingerprintHasher(""PlaceholderNode"").Combine(placeholder_key).Finish();
+  return ExprNodePtr::Own(std::move(self));
+}
+ExprNodePtr ExprNode::UnsafeMakeOperatorNode(
+    ExprOperatorPtr&& op, std::vector<ExprNodePtr>&& node_deps,
+    ExprAttributes&& attr) {
+  FingerprintHasher hasher(""OpNode"");
+  DCHECK(op);
+  hasher.Combine(op->fingerprint());
+  for (const auto& node_dep : node_deps) {
+    DCHECK(node_dep != nullptr);
+    hasher.Combine(node_dep->fingerprint());
+  }
+  hasher.Combine(attr);
+  auto self = std::make_unique<ExprNode>(PrivateConstructorTag());
+  self->type_ = ExprNodeType::kOperator;
+  self->op_ = std::move(op);
+  self->node_deps_ = std::move(node_deps);
+  self->attr_ = std::move(attr);
+  self->fingerprint_ = std::move(hasher).Finish();
+  return ExprNodePtr::Own(std::move(self));
+}
+ExprNode::~ExprNode() {
+  if (node_deps_.empty()) {
+    return;
+  }
+  constexpr size_t kMaxDepth = 32;
+  thread_local absl::NoDestructor<std::deque<std::vector<ExprNodePtr>>> deps;
+  thread_local size_t destructor_depth = 0;
+  if (destructor_depth > kMaxDepth) {
+    deps->push_back(std::move(node_deps_));
+    return;
+  }
+  destructor_depth++;
+  absl::Cleanup decrease_depth = [&] { --destructor_depth; };
+  node_deps_.clear();
+  if (destructor_depth == 1 && !deps->empty()) {
+    while (!deps->empty()) {
+      auto tmp = std::move(deps->back());
+      deps->pop_back();
+    }
+    deps->shrink_to_fit();
+  }
+}
+}  
+
+Return only Google Test code.
+"
+function_1536,SplitNameAndMetadata,datasets/extracted/functions/function_1536_SplitNameAndMetadata.cpp,"
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include ""xla/tsl/profiler/utils/parse_annotation.h""
+#include <stack>
+#include <string>
+#include <utility>
+#include <vector>
+#include ""absl/strings/ascii.h""
+#include ""absl/strings/str_split.h""
+#include ""absl/strings/string_view.h""
+namespace tsl {
+namespace profiler {
+namespace {
+std::vector<absl::string_view> SplitNameAndMetadata(
+    absl::string_view annotation) {
+  std::vector<absl::string_view> parts;
+  if (!HasMetadata(annotation)) {
+    parts.emplace_back(annotation);
+  } else {
+    annotation.remove_suffix(1);
+    parts = absl::StrSplit(annotation, '#');
+    if (parts.size() > 2) {
+      parts.resize(2);
+    }
+  }
+  while (parts.size() < 2) {
+    parts.emplace_back();
+  }
+  return parts;
+}
+std::vector<absl::string_view> SplitPairs(absl::string_view metadata) {
+  std::vector<absl::string_view> key_value_pairs;
+  std::stack<char> quotes;
+  size_t start = 0, end = 0;
+  for (; end < metadata.size(); ++end) {
+    char ch = metadata[end];
+    switch (ch) {
+      case '\""':
+      case '\'':
+        if (quotes.empty() || quotes.top() != ch) {
+          quotes.push(ch);
+        } else {
+          quotes.pop();
+        }
+        break;
+      case '{':
+      case '(':
+      case '[':
+        quotes.push(ch);
+        break;
+      case '}':
+        if (!quotes.empty() && quotes.top() == '{') {
+          quotes.pop();
+        }
+        break;
+      case ')':
+        if (!quotes.empty() && quotes.top() == '(') {
+          quotes.pop();
+        }
+        break;
+      case ']':
+        if (!quotes.empty() && quotes.top() == '[') {
+          quotes.pop();
+        }
+        break;
+      case ',':
+        if (quotes.empty()) {
+          if (end - start > 1) {
+            key_value_pairs.emplace_back(metadata.data() + start, end - start);
+          }
+          start = end + 1;  
+        }
+        break;
+    }
+  }
+  if (end - start > 1) {
+    key_value_pairs.emplace_back(metadata.data() + start, end - start);
+  }
+  return key_value_pairs;
+}
+std::vector<std::pair<absl::string_view, absl::string_view>> ParseMetadata(
+    absl::string_view metadata) {
+  std::vector<std::pair<absl::string_view, absl::string_view>> key_values;
+  for (absl::string_view pair : SplitPairs(metadata)) {
+    std::vector<absl::string_view> parts =
+        absl::StrSplit(pair, absl::MaxSplits('=', 1));
+    if (parts.size() == 2) {
+      absl::string_view key = absl::StripAsciiWhitespace(parts[0]);
+      absl::string_view value = absl::StripAsciiWhitespace(parts[1]);
+      if (!key.empty() && !value.empty()) {
+        key_values.push_back({key, value});
+      }
+    }
+  }
+  return key_values;
+}
+}  
+Annotation ParseAnnotation(absl::string_view annotation) {
+  Annotation result;
+  std::vector<absl::string_view> parts = SplitNameAndMetadata(annotation);
+  if (!parts.empty()) {
+    result.name = absl::StripAsciiWhitespace(parts[0]);
+    for (const auto& key_value : ParseMetadata(parts[1])) {
+      result.metadata.push_back({key_value.first, key_value.second});
+    }
+  }
+  return result;
+}
+std::vector<Annotation> ParseAnnotationStack(
+    absl::string_view annotation_stack) {
+  std::vector<Annotation> annotations;
+  const std::string kAnnotationDelimiter = ""::"";
+  for (absl::string_view annotation : absl::StrSplit(
+           annotation_stack, kAnnotationDelimiter, absl::SkipEmpty())) {
+    annotations.emplace_back(ParseAnnotation(annotation));
+  }
+  return annotations;
+}
+}  
+}  
+
+Return only Google Test code.
+"

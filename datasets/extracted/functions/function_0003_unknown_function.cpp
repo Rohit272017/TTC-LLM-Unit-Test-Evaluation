@@ -1,0 +1,7 @@
+#include "absl/log/log_sink.h"
+#include "absl/base/config.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+void LogSink::KeyFunction() const {}
+ABSL_NAMESPACE_END
+}  

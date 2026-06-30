@@ -1,0 +1,405 @@
+#include "tensorstore/internal/async_write_array.h"
+#include <stddef.h>
+#include <algorithm>
+#include <cassert>
+#include <utility>
+#include "absl/base/optimization.h"
+#include "absl/functional/function_ref.h"
+#include "absl/status/status.h"
+#include "tensorstore/array.h"
+#include "tensorstore/box.h"
+#include "tensorstore/contiguous_layout.h"
+#include "tensorstore/data_type.h"
+#include "tensorstore/index.h"
+#include "tensorstore/index_interval.h"
+#include "tensorstore/index_space/index_transform.h"
+#include "tensorstore/index_space/output_index_method.h"
+#include "tensorstore/index_space/transformed_array.h"
+#include "tensorstore/internal/arena.h"
+#include "tensorstore/internal/integer_overflow.h"
+#include "tensorstore/internal/masked_array.h"
+#include "tensorstore/internal/memory.h"
+#include "tensorstore/internal/nditerable.h"
+#include "tensorstore/internal/nditerable_transformed_array.h"
+#include "tensorstore/kvstore/generation.h"
+#include "tensorstore/rank.h"
+#include "tensorstore/strided_layout.h"
+#include "tensorstore/util/element_pointer.h"
+#include "tensorstore/util/extents.h"
+#include "tensorstore/util/iterate.h"
+#include "tensorstore/util/result.h"
+#include "tensorstore/util/span.h"
+#include "tensorstore/util/status.h"
+namespace tensorstore {
+namespace internal {
+Index AsyncWriteArray::Spec::GetNumInBoundsElements(BoxView<> domain) const {
+  const DimensionIndex rank = this->rank();
+  assert(domain.rank() == rank);
+  Index product = 1;
+  const BoxView<> bounds = this->valid_data_bounds;
+  for (DimensionIndex i = 0; i < rank; ++i) {
+    product *= Intersect(bounds[i], domain[i]).size();
+  }
+  return product;
+}
+SharedArrayView<const void> AsyncWriteArray::Spec::GetFillValueForDomain(
+    BoxView<> domain) const {
+  const DimensionIndex rank = domain.rank();
+  assert(Contains(overall_fill_value.domain(), domain));
+  return SharedArrayView<const void>(
+      AddByteOffset(
+          overall_fill_value.element_pointer(),
+          IndexInnerProduct(rank, overall_fill_value.byte_strides().data(),
+                            domain.origin().data())),
+      StridedLayoutView<>(rank, domain.shape().data(),
+                          overall_fill_value.byte_strides().data()));
+}
+Result<NDIterable::Ptr> AsyncWriteArray::Spec::GetReadNDIterable(
+    SharedArrayView<const void> array, BoxView<> domain,
+    IndexTransform<> chunk_transform, Arena* arena) const {
+  if (!array.valid()) array = GetFillValueForDomain(domain);
+  assert(internal::RangesEqual(array.shape(), domain.shape()));
+  StridedLayoutView<dynamic_rank, offset_origin> data_layout(
+      domain, array.byte_strides());
+  TENSORSTORE_ASSIGN_OR_RETURN(
+      chunk_transform,
+      ComposeLayoutAndTransform(data_layout, std::move(chunk_transform)));
+  return GetTransformedArrayNDIterable(
+      {AddByteOffset(std::move(array.element_pointer()),
+                     -data_layout.origin_byte_offset()),
+       std::move(chunk_transform)},
+      arena);
+}
+AsyncWriteArray::MaskedArray::MaskedArray(DimensionIndex rank) : mask(rank) {}
+void AsyncWriteArray::MaskedArray::WriteFillValue(const Spec& spec,
+                                                  BoxView<> domain) {
+  array = {};
+  mask.Reset();
+  mask.num_masked_elements = domain.num_elements();
+  mask.region = domain;
+}
+AsyncWriteArray::WritebackData
+AsyncWriteArray::MaskedArray::GetArrayForWriteback(
+    const Spec& spec, BoxView<> domain,
+    const SharedArrayView<const void>& read_array,
+    bool read_state_already_integrated) {
+  assert(domain.rank() == spec.rank());
+  const auto must_store = [&](ArrayView<const void> array) {
+    if (spec.store_if_equal_to_fill_value) return true;
+    return !AreArraysEqual(array, spec.GetFillValueForDomain(domain),
+                           spec.fill_value_comparison_kind);
+  };
+  const auto get_writeback_from_array = [&] {
+    WritebackData writeback;
+    writeback.array = array;
+    writeback.must_store = must_store(writeback.array);
+    if (!writeback.must_store) {
+      array = {};
+      writeback.array = spec.GetFillValueForDomain(domain);
+      writeback.may_retain_reference_to_array_indefinitely = true;
+    } else {
+      writeback.may_retain_reference_to_array_indefinitely =
+          (array_capabilities <= kImmutableAndCanRetainIndefinitely);
+    }
+    return writeback;
+  };
+  if (!array.valid()) {
+    if (IsFullyOverwritten(spec, domain)) {
+      WritebackData writeback;
+      writeback.array = spec.GetFillValueForDomain(domain);
+      writeback.must_store = false;
+      writeback.may_retain_reference_to_array_indefinitely = true;
+      return writeback;
+    }
+    if (IsUnmodified()) {
+      WritebackData writeback;
+      writeback.must_store = read_array.valid() && must_store(read_array);
+      if (writeback.must_store) {
+        writeback.array = read_array;
+      } else {
+        writeback.array = spec.GetFillValueForDomain(domain);
+      }
+      writeback.may_retain_reference_to_array_indefinitely = true;
+      return writeback;
+    }
+    if (!read_state_already_integrated && read_array.valid()) {
+      array_capabilities = kMutableArray;
+      array = tensorstore::MakeCopy(spec.GetFillValueForDomain(domain),
+                                    {c_order, include_repeated_elements});
+      RebaseMaskedArray(domain, ArrayView<const void>(read_array), array, mask);
+      return get_writeback_from_array();
+    }
+    WritebackData writeback;
+    writeback.array = spec.GetFillValueForDomain(domain);
+    writeback.must_store = false;
+    writeback.may_retain_reference_to_array_indefinitely = true;
+    return writeback;
+  }
+  if (!read_state_already_integrated &&
+      mask.num_masked_elements != domain.num_elements()) {
+    EnsureWritable(spec);
+    RebaseMaskedArray(
+        domain,
+        read_array.valid()
+            ? ArrayView<const void>(read_array)
+            : ArrayView<const void>(spec.GetFillValueForDomain(domain)),
+        array, mask);
+  }
+  return get_writeback_from_array();
+}
+size_t AsyncWriteArray::MaskedArray::EstimateSizeInBytes(
+    const Spec& spec, tensorstore::span<const Index> shape) const {
+  size_t total = 0;
+  if (array.valid()) {
+    total += GetByteExtent(array);
+  }
+  if (mask.mask_array) {
+    const Index num_elements = ProductOfExtents(shape);
+    total += num_elements * sizeof(bool);
+  }
+  return total;
+}
+void AsyncWriteArray::MaskedArray::EnsureWritable(const Spec& spec) {
+  assert(array.valid());
+  auto new_array =
+      tensorstore::AllocateArray(array.shape(), tensorstore::c_order,
+                                 tensorstore::default_init, spec.dtype());
+  CopyArray(array, new_array);
+  array = std::move(new_array);
+  array_capabilities = kMutableArray;
+}
+Result<TransformedSharedArray<void>>
+AsyncWriteArray::MaskedArray::GetWritableTransformedArray(
+    const Spec& spec, BoxView<> domain, IndexTransform<> chunk_transform) {
+  if (!array.valid()) {
+    this->array =
+        tensorstore::AllocateArray(domain.shape(), tensorstore::c_order,
+                                   tensorstore::default_init, spec.dtype());
+    array_capabilities = kMutableArray;
+    if (IsFullyOverwritten(spec, domain)) {
+      CopyArray(spec.GetFillValueForDomain(domain), this->array);
+    } else {
+      assert(IsUnmodified());
+    }
+  } else if (array_capabilities != kMutableArray) {
+    EnsureWritable(spec);
+  }
+  StridedLayoutView<dynamic_rank, offset_origin> data_layout{
+      domain, this->array.byte_strides()};
+  TENSORSTORE_ASSIGN_OR_RETURN(
+      chunk_transform,
+      ComposeLayoutAndTransform(data_layout, std::move(chunk_transform)));
+  return {std::in_place,
+          UnownedToShared(
+              AddByteOffset(ElementPointer<void>(this->array.element_pointer()),
+                            -data_layout.origin_byte_offset())),
+          std::move(chunk_transform)};
+}
+Result<NDIterable::Ptr> AsyncWriteArray::MaskedArray::BeginWrite(
+    const Spec& spec, BoxView<> domain, IndexTransform<> chunk_transform,
+    Arena* arena) {
+  TENSORSTORE_ASSIGN_OR_RETURN(
+      auto transformed_array,
+      GetWritableTransformedArray(spec, domain, std::move(chunk_transform)));
+  return GetTransformedArrayNDIterable(std::move(transformed_array), arena);
+}
+void AsyncWriteArray::MaskedArray::EndWrite(
+    const Spec& spec, BoxView<> domain, IndexTransformView<> chunk_transform,
+    Arena* arena) {
+  WriteToMask(&mask, domain, chunk_transform, arena);
+}
+void AsyncWriteArray::MaskedArray::Clear() {
+  mask.Reset();
+  array = {};
+}
+AsyncWriteArray::AsyncWriteArray(DimensionIndex rank) : write_state(rank) {}
+AsyncWriteArray::WritebackData AsyncWriteArray::GetArrayForWriteback(
+    const Spec& spec, BoxView<> domain,
+    const SharedArrayView<const void>& read_array,
+    const StorageGeneration& read_generation) {
+  auto writeback_data = write_state.GetArrayForWriteback(
+      spec, domain, read_array, read_generation == this->read_generation);
+  if (write_state.array.valid()) this->read_generation = read_generation;
+  return writeback_data;
+}
+Result<NDIterable::Ptr> AsyncWriteArray::GetReadNDIterable(
+    const Spec& spec, BoxView<> domain, SharedArrayView<const void> read_array,
+    const StorageGeneration& read_generation, IndexTransform<> chunk_transform,
+    Arena* arena) {
+  if (!read_array.valid()) read_array = spec.GetFillValueForDomain(domain);
+  if (!write_state.IsUnmodified()) {
+    if (write_state.IsFullyOverwritten(spec, domain)) {
+      if (!write_state.array.valid()) {
+        read_array = spec.GetFillValueForDomain(domain);
+      }
+    } else if (this->read_generation != read_generation) {
+      assert(write_state.array.valid());
+      if (write_state.array_capabilities != MaskedArray::kMutableArray) {
+        write_state.EnsureWritable(spec);
+      }
+      RebaseMaskedArray(domain, read_array, write_state.array,
+                        write_state.mask);
+      this->read_generation = read_generation;
+    }
+    if (write_state.array.valid()) {
+      read_array = write_state.array;
+    }
+  }
+  return spec.GetReadNDIterable(std::move(read_array), domain,
+                                std::move(chunk_transform), arena);
+}
+namespace {
+bool ZeroCopyToWriteArray(
+    const AsyncWriteArray::Spec& spec, BoxView<> domain,
+    IndexTransformView<> chunk_transform,
+    TransformedSharedArray<const void> source_array,
+    AsyncWriteArray::WriteArraySourceCapabilities source_capabilities,
+    AsyncWriteArray::MaskedArray& write_state) {
+  assert(source_capabilities !=
+         AsyncWriteArray::WriteArraySourceCapabilities::kCannotRetain);
+  const DimensionIndex dest_rank = domain.rank();
+  assert(spec.rank() == dest_rank);
+  assert(chunk_transform.output_rank() == dest_rank);
+  IndexTransformView<> source_transform = source_array.transform();
+  const DimensionIndex input_rank = chunk_transform.input_rank();
+  assert(source_transform.input_rank() == input_rank);
+  assert(source_transform.domain().box() == chunk_transform.domain().box());
+  Index new_byte_strides[kMaxRank];
+  DimensionIndex dest_dim_for_input_dim[kMaxRank];
+  std::fill_n(dest_dim_for_input_dim, input_rank, DimensionIndex(-1));
+  std::fill_n(new_byte_strides, dest_rank, Index(0));
+  for (DimensionIndex dest_dim = 0; dest_dim < dest_rank; ++dest_dim) {
+    if (domain.shape()[dest_dim] == 1) continue;
+    auto map = chunk_transform.output_index_map(dest_dim);
+    if (map.method() != OutputIndexMethod::single_input_dimension) {
+      continue;
+    }
+    [[maybe_unused]] DimensionIndex prev_dest_dim =
+        std::exchange(dest_dim_for_input_dim[map.input_dimension()], dest_dim);
+    assert(prev_dest_dim == -1);
+  }
+  const DimensionIndex source_output_rank = source_transform.output_rank();
+  Index source_offset = 0;
+  for (DimensionIndex source_output_dim = 0;
+       source_output_dim < source_output_rank; ++source_output_dim) {
+    auto map = source_transform.output_index_map(source_output_dim);
+    source_offset =
+        internal::wrap_on_overflow::Add(source_offset, map.offset());
+    switch (map.method()) {
+      case OutputIndexMethod::constant:
+        break;
+      case OutputIndexMethod::single_input_dimension: {
+        const DimensionIndex input_dim = map.input_dimension();
+        const DimensionIndex dest_dim = dest_dim_for_input_dim[input_dim];
+        const Index source_stride = map.stride();
+        if (dest_dim == -1) {
+          assert(source_transform.input_shape()[input_dim] == 1);
+          const Index source_origin =
+              source_transform.input_origin()[input_dim];
+          source_offset = internal::wrap_on_overflow::Add(
+              source_offset, internal::wrap_on_overflow::Multiply(
+                                 source_origin, source_stride));
+          break;
+        }
+        const auto dest_map = chunk_transform.output_index_map(dest_dim);
+        const Index dest_stride = dest_map.stride();
+        assert(dest_stride == 1 || dest_stride == -1);
+        new_byte_strides[dest_dim] = internal::wrap_on_overflow::Add(
+            new_byte_strides[dest_dim],
+            internal::wrap_on_overflow::Multiply(source_stride, dest_stride));
+        break;
+      }
+      case OutputIndexMethod::array:
+        return false;
+    }
+  }
+  for (DimensionIndex dest_dim = 0; dest_dim < dest_rank; ++dest_dim) {
+    auto map = chunk_transform.output_index_map(dest_dim);
+    source_offset = internal::wrap_on_overflow::Subtract(
+        source_offset, internal::wrap_on_overflow::Multiply(
+                           new_byte_strides[dest_dim], map.offset()));
+  }
+  auto& new_array = write_state.array;
+  new_array.layout() =
+      StridedLayoutView<>(dest_rank, domain.shape().data(), new_byte_strides);
+  source_offset = internal::wrap_on_overflow::Add(
+      source_offset,
+      IndexInnerProduct(dest_rank, domain.origin().data(), new_byte_strides));
+  new_array.element_pointer() = AddByteOffset(
+      SharedElementPointer<void>(internal::const_pointer_cast<void>(std::move(
+                                     source_array.element_pointer().pointer())),
+                                 spec.dtype()),
+      source_offset);
+  using WriteArraySourceCapabilities =
+      AsyncWriteArray::WriteArraySourceCapabilities;
+  using MaskedArray = AsyncWriteArray::MaskedArray;
+  switch (source_capabilities) {
+    case WriteArraySourceCapabilities::kCannotRetain:
+      ABSL_UNREACHABLE();
+    case WriteArraySourceCapabilities::kMutable:
+      write_state.array_capabilities = MaskedArray::kMutableArray;
+      break;
+    case WriteArraySourceCapabilities::kImmutableAndCanRetainIndefinitely:
+      write_state.array_capabilities =
+          MaskedArray::kImmutableAndCanRetainIndefinitely;
+      break;
+    case WriteArraySourceCapabilities::kImmutableAndCanRetainUntilCommit:
+      write_state.array_capabilities =
+          MaskedArray::kImmutableAndCanRetainUntilCommit;
+      break;
+  }
+  return true;
+}
+}  
+absl::Status AsyncWriteArray::WriteArray(
+    const Spec& spec, BoxView<> domain, IndexTransformView<> chunk_transform,
+    absl::FunctionRef<Result<std::pair<TransformedSharedArray<const void>,
+                                       WriteArraySourceCapabilities>>()>
+        get_source_array) {
+  [[maybe_unused]] const DimensionIndex dest_rank = spec.rank();
+  assert(domain.rank() == dest_rank);
+  assert(chunk_transform.output_rank() == dest_rank);
+  Box<dynamic_rank(kMaxRank)> output_range(spec.rank());
+  TENSORSTORE_ASSIGN_OR_RETURN(
+      bool output_range_exact,
+      tensorstore::GetOutputRange(chunk_transform, output_range));
+  if (!output_range_exact || output_range != domain) {
+    return absl::CancelledError();
+  }
+  TENSORSTORE_ASSIGN_OR_RETURN(auto source_array_info, get_source_array());
+  auto source_capabilities = std::get<1>(source_array_info);
+  if (source_capabilities == WriteArraySourceCapabilities::kCannotRetain) {
+    TENSORSTORE_ASSIGN_OR_RETURN(
+        auto dest_transformed_array,
+        write_state.GetWritableTransformedArray(spec, domain, chunk_transform));
+    TENSORSTORE_RETURN_IF_ERROR(CopyTransformedArray(
+        std::get<0>(source_array_info), dest_transformed_array));
+  } else {
+    if (!ZeroCopyToWriteArray(spec, domain, chunk_transform,
+                              std::get<0>(source_array_info),
+                              source_capabilities, write_state)) {
+      return absl::CancelledError();
+    }
+  }
+  write_state.mask.Reset();
+  write_state.mask.num_masked_elements = domain.num_elements();
+  write_state.mask.region = domain;
+  return absl::OkStatus();
+}
+Result<NDIterable::Ptr> AsyncWriteArray::BeginWrite(
+    const Spec& spec, BoxView<> domain, IndexTransform<> chunk_transform,
+    Arena* arena) {
+  return write_state.BeginWrite(spec, domain, std::move(chunk_transform),
+                                arena);
+}
+void AsyncWriteArray::EndWrite(const Spec& spec, BoxView<> domain,
+                               IndexTransformView<> chunk_transform,
+                               bool success, Arena* arena) {
+  if (!success) {
+    InvalidateReadState();
+    return;
+  }
+  write_state.EndWrite(spec, domain, chunk_transform, arena);
+}
+}  
+}  

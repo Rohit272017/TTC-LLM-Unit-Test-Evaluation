@@ -1,0 +1,85 @@
+#ifndef ABSL_TYPES_INTERNAL_SPAN_H_
+#define ABSL_TYPES_INTERNAL_SPAN_H_
+#include <algorithm>
+#include <cstddef>
+#include <string>
+#include <type_traits>
+#include "absl/algorithm/algorithm.h"
+#include "absl/base/internal/throw_delegate.h"
+#include "absl/meta/type_traits.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+template <typename T>
+class Span;
+namespace span_internal {
+template <typename C>
+constexpr auto GetDataImpl(C& c, char) noexcept  
+    -> decltype(c.data()) {
+  return c.data();
+}
+inline char* GetDataImpl(std::string& s,  
+                         int) noexcept {
+  return &s[0];
+}
+template <typename C>
+constexpr auto GetData(C& c) noexcept  
+    -> decltype(GetDataImpl(c, 0)) {
+  return GetDataImpl(c, 0);
+}
+template <typename C>
+using HasSize =
+    std::is_integral<absl::decay_t<decltype(std::declval<C&>().size())>>;
+template <typename T, typename C>
+using HasData =
+    std::is_convertible<absl::decay_t<decltype(GetData(std::declval<C&>()))>*,
+                        T* const*>;
+template <typename C>
+struct ElementType {
+  using type = typename absl::remove_reference_t<C>::value_type;
+};
+template <typename T, size_t N>
+struct ElementType<T (&)[N]> {
+  using type = T;
+};
+template <typename C>
+using ElementT = typename ElementType<C>::type;
+template <typename T>
+using EnableIfMutable =
+    typename std::enable_if<!std::is_const<T>::value, int>::type;
+template <template <typename> class SpanT, typename T>
+bool EqualImpl(SpanT<T> a, SpanT<T> b) {
+  static_assert(std::is_const<T>::value, "");
+  return std::equal(a.begin(), a.end(), b.begin(), b.end());
+}
+template <template <typename> class SpanT, typename T>
+bool LessThanImpl(SpanT<T> a, SpanT<T> b) {
+  static_assert(std::is_const<T>::value, "");
+  return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+}
+template <typename From, typename To>
+using EnableIfConvertibleTo =
+    typename std::enable_if<std::is_convertible<From, To>::value>::type;
+template <typename T, typename = void, typename = void>
+struct IsView {
+  static constexpr bool value = false;
+};
+template <typename T>
+struct IsView<
+    T, absl::void_t<decltype(span_internal::GetData(std::declval<const T&>()))>,
+    absl::void_t<decltype(span_internal::GetData(std::declval<T&>()))>> {
+ private:
+  using Container = std::remove_const_t<T>;
+  using ConstData =
+      decltype(span_internal::GetData(std::declval<const Container&>()));
+  using MutData = decltype(span_internal::GetData(std::declval<Container&>()));
+ public:
+  static constexpr bool value = std::is_same<ConstData, MutData>::value;
+};
+template <typename T>
+using EnableIfIsView = std::enable_if_t<IsView<T>::value, int>;
+template <typename T>
+using EnableIfNotIsView = std::enable_if_t<!IsView<T>::value, int>;
+}  
+ABSL_NAMESPACE_END
+}  
+#endif  

@@ -1,0 +1,191 @@
+#include "absl/strings/ascii.h"
+#include <climits>
+#include <cstddef>
+#include <cstring>
+#include <string>
+#include "absl/base/attributes.h"
+#include "absl/base/config.h"
+#include "absl/base/nullability.h"
+#include "absl/base/optimization.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace ascii_internal {
+ABSL_DLL const unsigned char kPropertyBits[256] = {
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,  
+    0x40, 0x68, 0x48, 0x48, 0x48, 0x48, 0x40, 0x40,
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,  
+    0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40,
+    0x28, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,  
+    0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,
+    0x84, 0x84, 0x84, 0x84, 0x84, 0x84, 0x84, 0x84,  
+    0x84, 0x84, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,
+    0x10, 0x85, 0x85, 0x85, 0x85, 0x85, 0x85, 0x05,  
+    0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05,
+    0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05,  
+    0x05, 0x05, 0x05, 0x10, 0x10, 0x10, 0x10, 0x10,
+    0x10, 0x85, 0x85, 0x85, 0x85, 0x85, 0x85, 0x05,  
+    0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05,
+    0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05,  
+    0x05, 0x05, 0x05, 0x10, 0x10, 0x10, 0x10, 0x40,
+};
+ABSL_DLL const char kToLower[256] = {
+  '\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07',
+  '\x08', '\x09', '\x0a', '\x0b', '\x0c', '\x0d', '\x0e', '\x0f',
+  '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17',
+  '\x18', '\x19', '\x1a', '\x1b', '\x1c', '\x1d', '\x1e', '\x1f',
+  '\x20', '\x21', '\x22', '\x23', '\x24', '\x25', '\x26', '\x27',
+  '\x28', '\x29', '\x2a', '\x2b', '\x2c', '\x2d', '\x2e', '\x2f',
+  '\x30', '\x31', '\x32', '\x33', '\x34', '\x35', '\x36', '\x37',
+  '\x38', '\x39', '\x3a', '\x3b', '\x3c', '\x3d', '\x3e', '\x3f',
+  '\x40',    'a',    'b',    'c',    'd',    'e',    'f',    'g',
+     'h',    'i',    'j',    'k',    'l',    'm',    'n',    'o',
+     'p',    'q',    'r',    's',    't',    'u',    'v',    'w',
+     'x',    'y',    'z', '\x5b', '\x5c', '\x5d', '\x5e', '\x5f',
+  '\x60', '\x61', '\x62', '\x63', '\x64', '\x65', '\x66', '\x67',
+  '\x68', '\x69', '\x6a', '\x6b', '\x6c', '\x6d', '\x6e', '\x6f',
+  '\x70', '\x71', '\x72', '\x73', '\x74', '\x75', '\x76', '\x77',
+  '\x78', '\x79', '\x7a', '\x7b', '\x7c', '\x7d', '\x7e', '\x7f',
+  '\x80', '\x81', '\x82', '\x83', '\x84', '\x85', '\x86', '\x87',
+  '\x88', '\x89', '\x8a', '\x8b', '\x8c', '\x8d', '\x8e', '\x8f',
+  '\x90', '\x91', '\x92', '\x93', '\x94', '\x95', '\x96', '\x97',
+  '\x98', '\x99', '\x9a', '\x9b', '\x9c', '\x9d', '\x9e', '\x9f',
+  '\xa0', '\xa1', '\xa2', '\xa3', '\xa4', '\xa5', '\xa6', '\xa7',
+  '\xa8', '\xa9', '\xaa', '\xab', '\xac', '\xad', '\xae', '\xaf',
+  '\xb0', '\xb1', '\xb2', '\xb3', '\xb4', '\xb5', '\xb6', '\xb7',
+  '\xb8', '\xb9', '\xba', '\xbb', '\xbc', '\xbd', '\xbe', '\xbf',
+  '\xc0', '\xc1', '\xc2', '\xc3', '\xc4', '\xc5', '\xc6', '\xc7',
+  '\xc8', '\xc9', '\xca', '\xcb', '\xcc', '\xcd', '\xce', '\xcf',
+  '\xd0', '\xd1', '\xd2', '\xd3', '\xd4', '\xd5', '\xd6', '\xd7',
+  '\xd8', '\xd9', '\xda', '\xdb', '\xdc', '\xdd', '\xde', '\xdf',
+  '\xe0', '\xe1', '\xe2', '\xe3', '\xe4', '\xe5', '\xe6', '\xe7',
+  '\xe8', '\xe9', '\xea', '\xeb', '\xec', '\xed', '\xee', '\xef',
+  '\xf0', '\xf1', '\xf2', '\xf3', '\xf4', '\xf5', '\xf6', '\xf7',
+  '\xf8', '\xf9', '\xfa', '\xfb', '\xfc', '\xfd', '\xfe', '\xff',
+};
+ABSL_DLL const char kToUpper[256] = {
+  '\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07',
+  '\x08', '\x09', '\x0a', '\x0b', '\x0c', '\x0d', '\x0e', '\x0f',
+  '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17',
+  '\x18', '\x19', '\x1a', '\x1b', '\x1c', '\x1d', '\x1e', '\x1f',
+  '\x20', '\x21', '\x22', '\x23', '\x24', '\x25', '\x26', '\x27',
+  '\x28', '\x29', '\x2a', '\x2b', '\x2c', '\x2d', '\x2e', '\x2f',
+  '\x30', '\x31', '\x32', '\x33', '\x34', '\x35', '\x36', '\x37',
+  '\x38', '\x39', '\x3a', '\x3b', '\x3c', '\x3d', '\x3e', '\x3f',
+  '\x40', '\x41', '\x42', '\x43', '\x44', '\x45', '\x46', '\x47',
+  '\x48', '\x49', '\x4a', '\x4b', '\x4c', '\x4d', '\x4e', '\x4f',
+  '\x50', '\x51', '\x52', '\x53', '\x54', '\x55', '\x56', '\x57',
+  '\x58', '\x59', '\x5a', '\x5b', '\x5c', '\x5d', '\x5e', '\x5f',
+  '\x60',    'A',    'B',    'C',    'D',    'E',    'F',    'G',
+     'H',    'I',    'J',    'K',    'L',    'M',    'N',    'O',
+     'P',    'Q',    'R',    'S',    'T',    'U',    'V',    'W',
+     'X',    'Y',    'Z', '\x7b', '\x7c', '\x7d', '\x7e', '\x7f',
+  '\x80', '\x81', '\x82', '\x83', '\x84', '\x85', '\x86', '\x87',
+  '\x88', '\x89', '\x8a', '\x8b', '\x8c', '\x8d', '\x8e', '\x8f',
+  '\x90', '\x91', '\x92', '\x93', '\x94', '\x95', '\x96', '\x97',
+  '\x98', '\x99', '\x9a', '\x9b', '\x9c', '\x9d', '\x9e', '\x9f',
+  '\xa0', '\xa1', '\xa2', '\xa3', '\xa4', '\xa5', '\xa6', '\xa7',
+  '\xa8', '\xa9', '\xaa', '\xab', '\xac', '\xad', '\xae', '\xaf',
+  '\xb0', '\xb1', '\xb2', '\xb3', '\xb4', '\xb5', '\xb6', '\xb7',
+  '\xb8', '\xb9', '\xba', '\xbb', '\xbc', '\xbd', '\xbe', '\xbf',
+  '\xc0', '\xc1', '\xc2', '\xc3', '\xc4', '\xc5', '\xc6', '\xc7',
+  '\xc8', '\xc9', '\xca', '\xcb', '\xcc', '\xcd', '\xce', '\xcf',
+  '\xd0', '\xd1', '\xd2', '\xd3', '\xd4', '\xd5', '\xd6', '\xd7',
+  '\xd8', '\xd9', '\xda', '\xdb', '\xdc', '\xdd', '\xde', '\xdf',
+  '\xe0', '\xe1', '\xe2', '\xe3', '\xe4', '\xe5', '\xe6', '\xe7',
+  '\xe8', '\xe9', '\xea', '\xeb', '\xec', '\xed', '\xee', '\xef',
+  '\xf0', '\xf1', '\xf2', '\xf3', '\xf4', '\xf5', '\xf6', '\xf7',
+  '\xf8', '\xf9', '\xfa', '\xfb', '\xfc', '\xfd', '\xfe', '\xff',
+};
+template <bool ToUpper>
+constexpr bool AsciiInAZRange(unsigned char c) {
+  constexpr unsigned char sub = (ToUpper ? 'a' : 'A') - SCHAR_MIN;
+  constexpr signed char threshold = SCHAR_MIN + 26;  
+  unsigned char u = c - sub;
+  return static_cast<signed char>(u) < threshold;
+}
+template <bool ToUpper>
+ABSL_ATTRIBUTE_ALWAYS_INLINE inline constexpr void AsciiStrCaseFoldImpl(
+    absl::Nonnull<char*> dst, absl::Nullable<const char*> src, size_t size) {
+  constexpr unsigned char kAsciiCaseBitFlip = 'a' ^ 'A';
+  for (size_t i = 0; i < size; ++i) {
+    unsigned char v = static_cast<unsigned char>(src[i]);
+    v ^= AsciiInAZRange<ToUpper>(v) ? kAsciiCaseBitFlip : 0;
+    dst[i] = static_cast<char>(v);
+  }
+}
+constexpr size_t kCaseFoldThreshold = 16;
+template <bool ToUpper>
+ABSL_ATTRIBUTE_NOINLINE constexpr void AsciiStrCaseFoldLong(
+    absl::Nonnull<char*> dst, absl::Nullable<const char*> src, size_t size) {
+  ABSL_ASSUME(size >= kCaseFoldThreshold);
+  AsciiStrCaseFoldImpl<ToUpper>(dst, src, size);
+}
+template <bool ToUpper>
+constexpr void AsciiStrCaseFold(absl::Nonnull<char*> dst,
+                                absl::Nullable<const char*> src, size_t size) {
+  size < kCaseFoldThreshold ? AsciiStrCaseFoldImpl<ToUpper>(dst, src, size)
+                            : AsciiStrCaseFoldLong<ToUpper>(dst, src, size);
+}
+void AsciiStrToLower(absl::Nonnull<char*> dst, absl::Nullable<const char*> src,
+                     size_t n) {
+  return AsciiStrCaseFold<false>(dst, src, n);
+}
+void AsciiStrToUpper(absl::Nonnull<char*> dst, absl::Nullable<const char*> src,
+                     size_t n) {
+  return AsciiStrCaseFold<true>(dst, src, n);
+}
+static constexpr size_t ValidateAsciiCasefold() {
+  constexpr size_t num_chars = 1 + CHAR_MAX - CHAR_MIN;
+  size_t incorrect_index = 0;
+  char lowered[num_chars] = {};
+  char uppered[num_chars] = {};
+  for (unsigned int i = 0; i < num_chars; ++i) {
+    uppered[i] = lowered[i] = static_cast<char>(i);
+  }
+  AsciiStrCaseFold<false>(&lowered[0], &lowered[0], num_chars);
+  AsciiStrCaseFold<true>(&uppered[0], &uppered[0], num_chars);
+  for (size_t i = 0; i < num_chars; ++i) {
+    const char ch = static_cast<char>(i),
+               ch_upper = ('a' <= ch && ch <= 'z' ? 'A' + (ch - 'a') : ch),
+               ch_lower = ('A' <= ch && ch <= 'Z' ? 'a' + (ch - 'A') : ch);
+    if (uppered[i] != ch_upper || lowered[i] != ch_lower) {
+      incorrect_index = i > 0 ? i : num_chars;
+      break;
+    }
+  }
+  return incorrect_index;
+}
+static_assert(ValidateAsciiCasefold() == 0, "error in case conversion");
+}  
+void AsciiStrToLower(absl::Nonnull<std::string*> s) {
+  char* p = &(*s)[0];
+  return ascii_internal::AsciiStrCaseFold<false>(p, p, s->size());
+}
+void AsciiStrToUpper(absl::Nonnull<std::string*> s) {
+  char* p = &(*s)[0];
+  return ascii_internal::AsciiStrCaseFold<true>(p, p, s->size());
+}
+void RemoveExtraAsciiWhitespace(absl::Nonnull<std::string*> str) {
+  auto stripped = StripAsciiWhitespace(*str);
+  if (stripped.empty()) {
+    str->clear();
+    return;
+  }
+  auto input_it = stripped.begin();
+  auto input_end = stripped.end();
+  auto output_it = &(*str)[0];
+  bool is_ws = false;
+  for (; input_it < input_end; ++input_it) {
+    if (is_ws) {
+      is_ws = absl::ascii_isspace(static_cast<unsigned char>(*input_it));
+      if (is_ws) --output_it;
+    } else {
+      is_ws = absl::ascii_isspace(static_cast<unsigned char>(*input_it));
+    }
+    *output_it = *input_it;
+    ++output_it;
+  }
+  str->erase(static_cast<size_t>(output_it - &(*str)[0]));
+}
+ABSL_NAMESPACE_END
+}  

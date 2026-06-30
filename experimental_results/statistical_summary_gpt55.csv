@@ -1,0 +1,5 @@
+metric,count,mean,median,std,min,max
+bva_score,60,0.3151,0.0,0.4316,0.0,1.0
+ecp_score,60,0.1488,0.0,0.2574,0.0,1.0
+ttc_score,60,0.133,0.036,0.234,0.0,1.0
+compile_success_rate,60,1.67,,,,

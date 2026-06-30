@@ -1,0 +1,334 @@
+#include "absl/time/clock.h"
+#include "absl/base/attributes.h"
+#include "absl/base/optimization.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
+#include <cstdint>
+#include <ctime>
+#include <limits>
+#include "absl/base/internal/spinlock.h"
+#include "absl/base/internal/unscaledcycleclock.h"
+#include "absl/base/macros.h"
+#include "absl/base/port.h"
+#include "absl/base/thread_annotations.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+Time Now() {
+  int64_t n = absl::GetCurrentTimeNanos();
+  if (n >= 0) {
+    return time_internal::FromUnixDuration(
+        time_internal::MakeDuration(n / 1000000000, n % 1000000000 * 4));
+  }
+  return time_internal::FromUnixDuration(absl::Nanoseconds(n));
+}
+ABSL_NAMESPACE_END
+}  
+#ifndef ABSL_USE_CYCLECLOCK_FOR_GET_CURRENT_TIME_NANOS
+#define ABSL_USE_CYCLECLOCK_FOR_GET_CURRENT_TIME_NANOS 0
+#endif
+#if defined(__APPLE__) || defined(_WIN32)
+#include "absl/time/internal/get_current_time_chrono.inc"
+#else
+#include "absl/time/internal/get_current_time_posix.inc"
+#endif
+#ifndef GET_CURRENT_TIME_NANOS_FROM_SYSTEM
+#define GET_CURRENT_TIME_NANOS_FROM_SYSTEM() \
+  ::absl::time_internal::GetCurrentTimeNanosFromSystem()
+#endif
+#if !ABSL_USE_CYCLECLOCK_FOR_GET_CURRENT_TIME_NANOS
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+int64_t GetCurrentTimeNanos() { return GET_CURRENT_TIME_NANOS_FROM_SYSTEM(); }
+ABSL_NAMESPACE_END
+}  
+#else  
+#ifndef GET_CURRENT_TIME_NANOS_CYCLECLOCK_NOW
+#define GET_CURRENT_TIME_NANOS_CYCLECLOCK_NOW() \
+  ::absl::time_internal::UnscaledCycleClockWrapperForGetCurrentTime::Now()
+#endif
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace time_internal {
+#if !defined(NDEBUG) && defined(__x86_64__)
+constexpr int64_t kCycleClockNowMask = ~int64_t{0xff};
+#else
+constexpr int64_t kCycleClockNowMask = ~int64_t{0};
+#endif
+class UnscaledCycleClockWrapperForGetCurrentTime {
+ public:
+  static int64_t Now() {
+    return base_internal::UnscaledCycleClock::Now() & kCycleClockNowMask;
+  }
+};
+}  
+static inline uint64_t SeqAcquire(std::atomic<uint64_t> *seq) {
+  uint64_t x = seq->fetch_add(1, std::memory_order_relaxed);
+  std::atomic_thread_fence(std::memory_order_release);
+  return x + 2;   
+}
+static inline void SeqRelease(std::atomic<uint64_t> *seq, uint64_t x) {
+  seq->store(x, std::memory_order_release);  
+}
+enum { kScale = 30 };
+static const uint64_t kMinNSBetweenSamples = 2000 << 20;
+static_assert(((kMinNSBetweenSamples << (kScale + 1)) >> (kScale + 1)) ==
+               kMinNSBetweenSamples,
+               "cannot represent kMaxBetweenSamplesNSScaled");
+struct TimeSampleAtomic {
+  std::atomic<uint64_t> raw_ns{0};              
+  std::atomic<uint64_t> base_ns{0};             
+  std::atomic<uint64_t> base_cycles{0};         
+  std::atomic<uint64_t> nsscaled_per_cycle{0};  
+  std::atomic<uint64_t> min_cycles_per_sample{0};
+};
+struct TimeSample {
+  uint64_t raw_ns = 0;                 
+  uint64_t base_ns = 0;                
+  uint64_t base_cycles = 0;            
+  uint64_t nsscaled_per_cycle = 0;     
+  uint64_t min_cycles_per_sample = 0;  
+};
+struct ABSL_CACHELINE_ALIGNED TimeState {
+  std::atomic<uint64_t> seq{0};
+  TimeSampleAtomic last_sample;  
+  int64_t stats_initializations{0};
+  int64_t stats_reinitializations{0};
+  int64_t stats_calibrations{0};
+  int64_t stats_slow_paths{0};
+  int64_t stats_fast_slow_paths{0};
+  uint64_t last_now_cycles ABSL_GUARDED_BY(lock){0};
+  std::atomic<uint64_t> approx_syscall_time_in_cycles{10 * 1000};
+  std::atomic<uint32_t> kernel_time_seen_smaller{0};
+  absl::base_internal::SpinLock lock{absl::kConstInit,
+                                     base_internal::SCHEDULE_KERNEL_ONLY};
+};
+ABSL_CONST_INIT static TimeState time_state;
+static int64_t GetCurrentTimeNanosFromKernel(uint64_t last_cycleclock,
+                                             uint64_t *cycleclock)
+    ABSL_EXCLUSIVE_LOCKS_REQUIRED(time_state.lock) {
+  uint64_t local_approx_syscall_time_in_cycles =  
+      time_state.approx_syscall_time_in_cycles.load(std::memory_order_relaxed);
+  int64_t current_time_nanos_from_system;
+  uint64_t before_cycles;
+  uint64_t after_cycles;
+  uint64_t elapsed_cycles;
+  int loops = 0;
+  do {
+    before_cycles =
+        static_cast<uint64_t>(GET_CURRENT_TIME_NANOS_CYCLECLOCK_NOW());
+    current_time_nanos_from_system = GET_CURRENT_TIME_NANOS_FROM_SYSTEM();
+    after_cycles =
+        static_cast<uint64_t>(GET_CURRENT_TIME_NANOS_CYCLECLOCK_NOW());
+    elapsed_cycles = after_cycles - before_cycles;
+    if (elapsed_cycles >= local_approx_syscall_time_in_cycles &&
+        ++loops == 20) {  
+      loops = 0;
+      if (local_approx_syscall_time_in_cycles < 1000 * 1000) {
+        local_approx_syscall_time_in_cycles =
+            (local_approx_syscall_time_in_cycles + 1) << 1;
+      }
+      time_state.approx_syscall_time_in_cycles.store(
+          local_approx_syscall_time_in_cycles, std::memory_order_relaxed);
+    }
+  } while (elapsed_cycles >= local_approx_syscall_time_in_cycles ||
+           last_cycleclock - after_cycles < (static_cast<uint64_t>(1) << 16));
+  if ((local_approx_syscall_time_in_cycles >> 1) < elapsed_cycles) {
+    time_state.kernel_time_seen_smaller.store(0, std::memory_order_relaxed);
+  } else if (time_state.kernel_time_seen_smaller.fetch_add(
+                 1, std::memory_order_relaxed) >= 3) {
+    const uint64_t new_approximation =
+        local_approx_syscall_time_in_cycles -
+        (local_approx_syscall_time_in_cycles >> 3);
+    time_state.approx_syscall_time_in_cycles.store(new_approximation,
+                                                   std::memory_order_relaxed);
+    time_state.kernel_time_seen_smaller.store(0, std::memory_order_relaxed);
+  }
+  *cycleclock = after_cycles;
+  return current_time_nanos_from_system;
+}
+static int64_t GetCurrentTimeNanosSlowPath() ABSL_ATTRIBUTE_COLD;
+static void ReadTimeSampleAtomic(const struct TimeSampleAtomic *atomic,
+                                 struct TimeSample *sample) {
+  sample->base_ns = atomic->base_ns.load(std::memory_order_relaxed);
+  sample->base_cycles = atomic->base_cycles.load(std::memory_order_relaxed);
+  sample->nsscaled_per_cycle =
+      atomic->nsscaled_per_cycle.load(std::memory_order_relaxed);
+  sample->min_cycles_per_sample =
+      atomic->min_cycles_per_sample.load(std::memory_order_relaxed);
+  sample->raw_ns = atomic->raw_ns.load(std::memory_order_relaxed);
+}
+int64_t GetCurrentTimeNanos() {
+  uint64_t base_ns;
+  uint64_t base_cycles;
+  uint64_t nsscaled_per_cycle;
+  uint64_t min_cycles_per_sample;
+  uint64_t seq_read0;
+  uint64_t seq_read1;
+  uint64_t now_cycles =
+      static_cast<uint64_t>(GET_CURRENT_TIME_NANOS_CYCLECLOCK_NOW());
+  seq_read0 = time_state.seq.load(std::memory_order_acquire);
+  base_ns = time_state.last_sample.base_ns.load(std::memory_order_relaxed);
+  base_cycles =
+      time_state.last_sample.base_cycles.load(std::memory_order_relaxed);
+  nsscaled_per_cycle =
+      time_state.last_sample.nsscaled_per_cycle.load(std::memory_order_relaxed);
+  min_cycles_per_sample = time_state.last_sample.min_cycles_per_sample.load(
+      std::memory_order_relaxed);
+  std::atomic_thread_fence(std::memory_order_acquire);
+  seq_read1 = time_state.seq.load(std::memory_order_relaxed);
+  uint64_t delta_cycles;
+  if (seq_read0 == seq_read1 && (seq_read0 & 1) == 0 &&
+      (delta_cycles = now_cycles - base_cycles) < min_cycles_per_sample) {
+    return static_cast<int64_t>(
+        base_ns + ((delta_cycles * nsscaled_per_cycle) >> kScale));
+  }
+  return GetCurrentTimeNanosSlowPath();
+}
+static uint64_t SafeDivideAndScale(uint64_t a, uint64_t b) {
+  int safe_shift = kScale;
+  while (((a << safe_shift) >> safe_shift) != a) {
+    safe_shift--;
+  }
+  uint64_t scaled_b = b >> (kScale - safe_shift);
+  uint64_t quotient = 0;
+  if (scaled_b != 0) {
+    quotient = (a << safe_shift) / scaled_b;
+  }
+  return quotient;
+}
+static uint64_t UpdateLastSample(
+    uint64_t now_cycles, uint64_t now_ns, uint64_t delta_cycles,
+    const struct TimeSample *sample) ABSL_ATTRIBUTE_COLD;
+ABSL_ATTRIBUTE_NOINLINE
+static int64_t GetCurrentTimeNanosSlowPath()
+    ABSL_LOCKS_EXCLUDED(time_state.lock) {
+  time_state.lock.Lock();
+  uint64_t now_cycles;
+  uint64_t now_ns = static_cast<uint64_t>(
+      GetCurrentTimeNanosFromKernel(time_state.last_now_cycles, &now_cycles));
+  time_state.last_now_cycles = now_cycles;
+  uint64_t estimated_base_ns;
+  struct TimeSample sample;
+  ReadTimeSampleAtomic(&time_state.last_sample, &sample);
+  uint64_t delta_cycles = now_cycles - sample.base_cycles;
+  if (delta_cycles < sample.min_cycles_per_sample) {
+    estimated_base_ns = sample.base_ns +
+        ((delta_cycles * sample.nsscaled_per_cycle) >> kScale);
+    time_state.stats_fast_slow_paths++;
+  } else {
+    estimated_base_ns =
+        UpdateLastSample(now_cycles, now_ns, delta_cycles, &sample);
+  }
+  time_state.lock.Unlock();
+  return static_cast<int64_t>(estimated_base_ns);
+}
+static uint64_t UpdateLastSample(uint64_t now_cycles, uint64_t now_ns,
+                                 uint64_t delta_cycles,
+                                 const struct TimeSample *sample)
+    ABSL_EXCLUSIVE_LOCKS_REQUIRED(time_state.lock) {
+  uint64_t estimated_base_ns = now_ns;
+  uint64_t lock_value =
+      SeqAcquire(&time_state.seq);  
+  if (sample->raw_ns == 0 ||  
+      sample->raw_ns + static_cast<uint64_t>(5) * 1000 * 1000 * 1000 < now_ns ||
+      now_ns < sample->raw_ns || now_cycles < sample->base_cycles) {
+    time_state.last_sample.raw_ns.store(now_ns, std::memory_order_relaxed);
+    time_state.last_sample.base_ns.store(estimated_base_ns,
+                                         std::memory_order_relaxed);
+    time_state.last_sample.base_cycles.store(now_cycles,
+                                             std::memory_order_relaxed);
+    time_state.last_sample.nsscaled_per_cycle.store(0,
+                                                    std::memory_order_relaxed);
+    time_state.last_sample.min_cycles_per_sample.store(
+        0, std::memory_order_relaxed);
+    time_state.stats_initializations++;
+  } else if (sample->raw_ns + 500 * 1000 * 1000 < now_ns &&
+             sample->base_cycles + 50 < now_cycles) {
+    if (sample->nsscaled_per_cycle != 0) {  
+      uint64_t estimated_scaled_ns;
+      int s = -1;
+      do {
+        s++;
+        estimated_scaled_ns = (delta_cycles >> s) * sample->nsscaled_per_cycle;
+      } while (estimated_scaled_ns / sample->nsscaled_per_cycle !=
+               (delta_cycles >> s));
+      estimated_base_ns = sample->base_ns +
+                          (estimated_scaled_ns >> (kScale - s));
+    }
+    uint64_t ns = now_ns - sample->raw_ns;
+    uint64_t measured_nsscaled_per_cycle = SafeDivideAndScale(ns, delta_cycles);
+    uint64_t assumed_next_sample_delta_cycles =
+        SafeDivideAndScale(kMinNSBetweenSamples, measured_nsscaled_per_cycle);
+    int64_t diff_ns = static_cast<int64_t>(now_ns - estimated_base_ns);
+    ns = static_cast<uint64_t>(static_cast<int64_t>(kMinNSBetweenSamples) +
+                               diff_ns - (diff_ns / 16));
+    uint64_t new_nsscaled_per_cycle =
+        SafeDivideAndScale(ns, assumed_next_sample_delta_cycles);
+    if (new_nsscaled_per_cycle != 0 &&
+        diff_ns < 100 * 1000 * 1000 && -diff_ns < 100 * 1000 * 1000) {
+      time_state.last_sample.nsscaled_per_cycle.store(
+          new_nsscaled_per_cycle, std::memory_order_relaxed);
+      uint64_t new_min_cycles_per_sample =
+          SafeDivideAndScale(kMinNSBetweenSamples, new_nsscaled_per_cycle);
+      time_state.last_sample.min_cycles_per_sample.store(
+          new_min_cycles_per_sample, std::memory_order_relaxed);
+      time_state.stats_calibrations++;
+    } else {  
+      time_state.last_sample.nsscaled_per_cycle.store(
+          0, std::memory_order_relaxed);
+      time_state.last_sample.min_cycles_per_sample.store(
+          0, std::memory_order_relaxed);
+      estimated_base_ns = now_ns;
+      time_state.stats_reinitializations++;
+    }
+    time_state.last_sample.raw_ns.store(now_ns, std::memory_order_relaxed);
+    time_state.last_sample.base_ns.store(estimated_base_ns,
+                                         std::memory_order_relaxed);
+    time_state.last_sample.base_cycles.store(now_cycles,
+                                             std::memory_order_relaxed);
+  } else {
+    time_state.stats_slow_paths++;
+  }
+  SeqRelease(&time_state.seq, lock_value);  
+  return estimated_base_ns;
+}
+ABSL_NAMESPACE_END
+}  
+#endif  
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace {
+constexpr absl::Duration MaxSleep() {
+#ifdef _WIN32
+  return absl::Milliseconds(
+      std::numeric_limits<unsigned long>::max());  
+#else
+  return absl::Seconds(std::numeric_limits<time_t>::max());
+#endif
+}
+void SleepOnce(absl::Duration to_sleep) {
+#ifdef _WIN32
+  Sleep(static_cast<DWORD>(to_sleep / absl::Milliseconds(1)));
+#else
+  struct timespec sleep_time = absl::ToTimespec(to_sleep);
+  while (nanosleep(&sleep_time, &sleep_time) != 0 && errno == EINTR) {
+  }
+#endif
+}
+}  
+ABSL_NAMESPACE_END
+}  
+extern "C" {
+ABSL_ATTRIBUTE_WEAK void ABSL_INTERNAL_C_SYMBOL(AbslInternalSleepFor)(
+    absl::Duration duration) {
+  while (duration > absl::ZeroDuration()) {
+    absl::Duration to_sleep = std::min(duration, absl::MaxSleep());
+    absl::SleepOnce(to_sleep);
+    duration -= to_sleep;
+  }
+}
+}  

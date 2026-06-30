@@ -1,0 +1,100 @@
+#ifndef ABSL_MEMORY_MEMORY_H_
+#define ABSL_MEMORY_MEMORY_H_
+#include <cstddef>
+#include <limits>
+#include <memory>
+#include <new>
+#include <type_traits>
+#include <utility>
+#include "absl/base/macros.h"
+#include "absl/meta/type_traits.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+template <typename T>
+std::unique_ptr<T> WrapUnique(T* ptr) {
+  static_assert(!std::is_array<T>::value, "array types are unsupported");
+  static_assert(std::is_object<T>::value, "non-object types are unsupported");
+  return std::unique_ptr<T>(ptr);
+}
+using std::make_unique;
+template <typename T>
+auto RawPtr(T&& ptr) -> decltype(std::addressof(*ptr)) {
+  return (ptr != nullptr) ? std::addressof(*ptr) : nullptr;
+}
+inline std::nullptr_t RawPtr(std::nullptr_t) { return nullptr; }
+template <typename T, typename D>
+std::shared_ptr<T> ShareUniquePtr(std::unique_ptr<T, D>&& ptr) {
+  return ptr ? std::shared_ptr<T>(std::move(ptr)) : std::shared_ptr<T>();
+}
+template <typename T>
+std::weak_ptr<T> WeakenPtr(const std::shared_ptr<T>& ptr) {
+  return std::weak_ptr<T>(ptr);
+}
+using std::pointer_traits;
+using std::allocator_traits;
+namespace memory_internal {
+template <template <typename> class Extract, typename Obj, typename Default,
+          typename>
+struct ExtractOr {
+  using type = Default;
+};
+template <template <typename> class Extract, typename Obj, typename Default>
+struct ExtractOr<Extract, Obj, Default, void_t<Extract<Obj>>> {
+  using type = Extract<Obj>;
+};
+template <template <typename> class Extract, typename Obj, typename Default>
+using ExtractOrT = typename ExtractOr<Extract, Obj, Default, void>::type;
+template <typename Alloc>
+using GetIsNothrow = typename Alloc::is_nothrow;
+}  
+template <typename Alloc>
+struct allocator_is_nothrow
+    : memory_internal::ExtractOrT<memory_internal::GetIsNothrow, Alloc,
+                                  std::false_type> {};
+#if defined(ABSL_ALLOCATOR_NOTHROW) && ABSL_ALLOCATOR_NOTHROW
+template <typename T>
+struct allocator_is_nothrow<std::allocator<T>> : std::true_type {};
+struct default_allocator_is_nothrow : std::true_type {};
+#else
+struct default_allocator_is_nothrow : std::false_type {};
+#endif
+namespace memory_internal {
+template <typename Allocator, typename Iterator, typename... Args>
+void ConstructRange(Allocator& alloc, Iterator first, Iterator last,
+                    const Args&... args) {
+  for (Iterator cur = first; cur != last; ++cur) {
+    ABSL_INTERNAL_TRY {
+      std::allocator_traits<Allocator>::construct(alloc, std::addressof(*cur),
+                                                  args...);
+    }
+    ABSL_INTERNAL_CATCH_ANY {
+      while (cur != first) {
+        --cur;
+        std::allocator_traits<Allocator>::destroy(alloc, std::addressof(*cur));
+      }
+      ABSL_INTERNAL_RETHROW;
+    }
+  }
+}
+template <typename Allocator, typename Iterator, typename InputIterator>
+void CopyRange(Allocator& alloc, Iterator destination, InputIterator first,
+               InputIterator last) {
+  for (Iterator cur = destination; first != last;
+       static_cast<void>(++cur), static_cast<void>(++first)) {
+    ABSL_INTERNAL_TRY {
+      std::allocator_traits<Allocator>::construct(alloc, std::addressof(*cur),
+                                                  *first);
+    }
+    ABSL_INTERNAL_CATCH_ANY {
+      while (cur != destination) {
+        --cur;
+        std::allocator_traits<Allocator>::destroy(alloc, std::addressof(*cur));
+      }
+      ABSL_INTERNAL_RETHROW;
+    }
+  }
+}
+}  
+ABSL_NAMESPACE_END
+}  
+#endif  

@@ -1,0 +1,23 @@
+#ifndef ABSL_BASE_INTERNAL_FAST_TYPE_ID_H_
+#define ABSL_BASE_INTERNAL_FAST_TYPE_ID_H_
+#include "absl/base/config.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace base_internal {
+template <typename Type>
+struct FastTypeTag {
+  constexpr static char dummy_var = 0;
+};
+#ifdef ABSL_INTERNAL_NEED_REDUNDANT_CONSTEXPR_DECL
+template <typename Type>
+constexpr char FastTypeTag<Type>::dummy_var;
+#endif
+using FastTypeIdType = const void*;
+template <typename Type>
+constexpr inline FastTypeIdType FastTypeId() {
+  return &FastTypeTag<Type>::dummy_var;
+}
+}  
+ABSL_NAMESPACE_END
+}  
+#endif  

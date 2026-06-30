@@ -1,0 +1,36 @@
+#include "absl/strings/internal/cord_rep_crc.h"
+#include <cassert>
+#include <cstdint>
+#include <utility>
+#include "absl/base/config.h"
+#include "absl/strings/internal/cord_internal.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace cord_internal {
+CordRepCrc* CordRepCrc::New(CordRep* child, crc_internal::CrcCordState state) {
+  if (child != nullptr && child->IsCrc()) {
+    if (child->refcount.IsOne()) {
+      child->crc()->crc_cord_state = std::move(state);
+      return child->crc();
+    }
+    CordRep* old = child;
+    child = old->crc()->child;
+    CordRep::Ref(child);
+    CordRep::Unref(old);
+  }
+  auto* new_cordrep = new CordRepCrc;
+  new_cordrep->length = child != nullptr ? child->length : 0;
+  new_cordrep->tag = cord_internal::CRC;
+  new_cordrep->child = child;
+  new_cordrep->crc_cord_state = std::move(state);
+  return new_cordrep;
+}
+void CordRepCrc::Destroy(CordRepCrc* node) {
+  if (node->child != nullptr) {
+    CordRep::Unref(node->child);
+  }
+  delete node;
+}
+}  
+ABSL_NAMESPACE_END
+}  

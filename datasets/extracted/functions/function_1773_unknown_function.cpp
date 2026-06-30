@@ -1,0 +1,4 @@
+#ifndef THIRD_PARTY_CEL_CPP_INTERNAL_BENCHMARK_H_
+#define THIRD_PARTY_CEL_CPP_INTERNAL_BENCHMARK_H_
+#include "benchmark/benchmark.h"  
+#endif  

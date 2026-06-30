@@ -1,0 +1,58 @@
+#include "absl/strings/internal/cordz_functions.h"
+#include <atomic>
+#include <cmath>
+#include <limits>
+#include <random>
+#include "absl/base/attributes.h"
+#include "absl/base/config.h"
+#include "absl/base/internal/raw_logging.h"
+#include "absl/profiling/internal/exponential_biased.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace cord_internal {
+namespace {
+std::atomic<int> g_cordz_mean_interval(50000);
+}  
+#ifdef ABSL_INTERNAL_CORDZ_ENABLED
+static constexpr int64_t kInitCordzNextSample = -1;
+ABSL_CONST_INIT thread_local SamplingState cordz_next_sample = {
+    kInitCordzNextSample, 1};
+constexpr int64_t kIntervalIfDisabled = 1 << 16;
+ABSL_ATTRIBUTE_NOINLINE int64_t
+cordz_should_profile_slow(SamplingState& state) {
+  thread_local absl::profiling_internal::ExponentialBiased
+      exponential_biased_generator;
+  int32_t mean_interval = get_cordz_mean_interval();
+  if (mean_interval <= 0) {
+    state = {kIntervalIfDisabled, kIntervalIfDisabled};
+    return 0;
+  }
+  if (mean_interval == 1) {
+    state = {1, 1};
+    return 1;
+  }
+  if (cordz_next_sample.next_sample <= 0) {
+    const bool initialized =
+        cordz_next_sample.next_sample != kInitCordzNextSample;
+    auto old_stride = state.sample_stride;
+    auto stride = exponential_biased_generator.GetStride(mean_interval);
+    state = {stride, stride};
+    bool should_sample = initialized || cordz_should_profile() > 0;
+    return should_sample ? old_stride : 0;
+  }
+  --state.next_sample;
+  return 0;
+}
+void cordz_set_next_sample_for_testing(int64_t next_sample) {
+  cordz_next_sample = {next_sample, next_sample};
+}
+#endif  
+int32_t get_cordz_mean_interval() {
+  return g_cordz_mean_interval.load(std::memory_order_acquire);
+}
+void set_cordz_mean_interval(int32_t mean_interval) {
+  g_cordz_mean_interval.store(mean_interval, std::memory_order_release);
+}
+}  
+ABSL_NAMESPACE_END
+}  

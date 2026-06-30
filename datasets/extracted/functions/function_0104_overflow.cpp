@@ -1,0 +1,24 @@
+#include "absl/strings/internal/ostringstream.h"
+#include <cassert>
+#include <cstddef>
+#include <ios>
+#include <streambuf>
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace strings_internal {
+OStringStream::Streambuf::int_type OStringStream::Streambuf::overflow(int c) {
+  assert(str_);
+  if (!std::streambuf::traits_type::eq_int_type(
+          c, std::streambuf::traits_type::eof()))
+    str_->push_back(static_cast<char>(c));
+  return 1;
+}
+std::streamsize OStringStream::Streambuf::xsputn(const char* s,
+                                                 std::streamsize n) {
+  assert(str_);
+  str_->append(s, static_cast<size_t>(n));
+  return n;
+}
+}  
+ABSL_NAMESPACE_END
+}  

@@ -1,0 +1,67 @@
+#ifndef ABSL_STRINGS_INTERNAL_RESIZE_UNINITIALIZED_H_
+#define ABSL_STRINGS_INTERNAL_RESIZE_UNINITIALIZED_H_
+#include <algorithm>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include "absl/base/port.h"
+#include "absl/meta/type_traits.h"  
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace strings_internal {
+template <typename string_type, typename = void>
+struct ResizeUninitializedTraits {
+  using HasMember = std::false_type;
+  static void Resize(string_type* s, size_t new_size) { s->resize(new_size); }
+};
+template <typename string_type>
+struct ResizeUninitializedTraits<
+    string_type, absl::void_t<decltype(std::declval<string_type&>()
+                                           .__resize_default_init(237))> > {
+  using HasMember = std::true_type;
+  static void Resize(string_type* s, size_t new_size) {
+    s->__resize_default_init(new_size);
+  }
+};
+template <typename string_type>
+inline constexpr bool STLStringSupportsNontrashingResize(string_type*) {
+  return ResizeUninitializedTraits<string_type>::HasMember::value;
+}
+template <typename string_type, typename = void>
+inline void STLStringResizeUninitialized(string_type* s, size_t new_size) {
+  ResizeUninitializedTraits<string_type>::Resize(s, new_size);
+}
+template <typename string_type>
+void STLStringReserveAmortized(string_type* s, size_t new_size) {
+  const size_t cap = s->capacity();
+  if (new_size > cap) {
+    s->reserve((std::max)(new_size, 2 * cap));
+  }
+}
+template <typename string_type, typename = void>
+struct AppendUninitializedTraits {
+  static void Append(string_type* s, size_t n) {
+    s->append(n, typename string_type::value_type());
+  }
+};
+template <typename string_type>
+struct AppendUninitializedTraits<
+    string_type, absl::void_t<decltype(std::declval<string_type&>()
+                                           .__append_default_init(237))> > {
+  static void Append(string_type* s, size_t n) {
+    s->__append_default_init(n);
+  }
+};
+template <typename string_type>
+void STLStringResizeUninitializedAmortized(string_type* s, size_t new_size) {
+  const size_t size = s->size();
+  if (new_size > size) {
+    AppendUninitializedTraits<string_type>::Append(s, new_size - size);
+  } else {
+    s->erase(new_size);
+  }
+}
+}  
+ABSL_NAMESPACE_END
+}  
+#endif  

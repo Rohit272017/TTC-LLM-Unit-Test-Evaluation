@@ -1,0 +1,58 @@
+#ifndef ABSL_RANDOM_MOCK_DISTRIBUTIONS_H_
+#define ABSL_RANDOM_MOCK_DISTRIBUTIONS_H_
+#include "absl/base/config.h"
+#include "absl/random/bernoulli_distribution.h"
+#include "absl/random/beta_distribution.h"
+#include "absl/random/distributions.h"
+#include "absl/random/exponential_distribution.h"
+#include "absl/random/gaussian_distribution.h"
+#include "absl/random/internal/mock_overload_set.h"
+#include "absl/random/internal/mock_validators.h"
+#include "absl/random/log_uniform_int_distribution.h"
+#include "absl/random/mocking_bit_gen.h"
+#include "absl/random/poisson_distribution.h"
+#include "absl/random/zipf_distribution.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+template <typename R>
+using MockUniform = random_internal::MockOverloadSetWithValidator<
+    random_internal::UniformDistributionWrapper<R>,
+    random_internal::UniformDistributionValidator<R>,
+    R(IntervalClosedOpenTag, MockingBitGen&, R, R),
+    R(IntervalClosedClosedTag, MockingBitGen&, R, R),
+    R(IntervalOpenOpenTag, MockingBitGen&, R, R),
+    R(IntervalOpenClosedTag, MockingBitGen&, R, R), R(MockingBitGen&, R, R),
+    R(MockingBitGen&)>;
+using MockBernoulli =
+    random_internal::MockOverloadSet<absl::bernoulli_distribution,
+                                     bool(MockingBitGen&, double)>;
+template <typename RealType>
+using MockBeta =
+    random_internal::MockOverloadSet<absl::beta_distribution<RealType>,
+                                     RealType(MockingBitGen&, RealType,
+                                              RealType)>;
+template <typename RealType>
+using MockExponential =
+    random_internal::MockOverloadSet<absl::exponential_distribution<RealType>,
+                                     RealType(MockingBitGen&, RealType)>;
+template <typename RealType>
+using MockGaussian =
+    random_internal::MockOverloadSet<absl::gaussian_distribution<RealType>,
+                                     RealType(MockingBitGen&, RealType,
+                                              RealType)>;
+template <typename IntType>
+using MockLogUniform = random_internal::MockOverloadSet<
+    absl::log_uniform_int_distribution<IntType>,
+    IntType(MockingBitGen&, IntType, IntType, IntType)>;
+template <typename IntType>
+using MockPoisson =
+    random_internal::MockOverloadSet<absl::poisson_distribution<IntType>,
+                                     IntType(MockingBitGen&, double)>;
+template <typename IntType>
+using MockZipf =
+    random_internal::MockOverloadSet<absl::zipf_distribution<IntType>,
+                                     IntType(MockingBitGen&, IntType, double,
+                                             double)>;
+ABSL_NAMESPACE_END
+}  
+#endif  

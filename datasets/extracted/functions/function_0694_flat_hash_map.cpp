@@ -1,0 +1,145 @@
+#ifndef ABSL_CONTAINER_FLAT_HASH_MAP_H_
+#define ABSL_CONTAINER_FLAT_HASH_MAP_H_
+#include <cstddef>
+#include <memory>
+#include <type_traits>
+#include <utility>
+#include "absl/algorithm/container.h"
+#include "absl/base/attributes.h"
+#include "absl/base/macros.h"
+#include "absl/container/hash_container_defaults.h"
+#include "absl/container/internal/container_memory.h"
+#include "absl/container/internal/raw_hash_map.h"  
+#include "absl/meta/type_traits.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace container_internal {
+template <class K, class V>
+struct FlatHashMapPolicy;
+}  
+template <class K, class V, class Hash = DefaultHashContainerHash<K>,
+          class Eq = DefaultHashContainerEq<K>,
+          class Allocator = std::allocator<std::pair<const K, V>>>
+class ABSL_ATTRIBUTE_OWNER flat_hash_map
+    : public absl::container_internal::raw_hash_map<
+          absl::container_internal::FlatHashMapPolicy<K, V>, Hash, Eq,
+          Allocator> {
+  using Base = typename flat_hash_map::raw_hash_map;
+ public:
+  flat_hash_map() {}
+  using Base::Base;
+  using Base::begin;
+  using Base::cbegin;
+  using Base::cend;
+  using Base::end;
+  using Base::capacity;
+  using Base::empty;
+  using Base::max_size;
+  using Base::size;
+  using Base::clear;
+  using Base::erase;
+  using Base::insert;
+  using Base::insert_or_assign;
+  using Base::emplace;
+  using Base::emplace_hint;
+  using Base::try_emplace;
+  using Base::extract;
+  using Base::merge;
+  using Base::swap;
+  using Base::rehash;
+  using Base::reserve;
+  using Base::at;
+  using Base::contains;
+  using Base::count;
+  using Base::equal_range;
+  using Base::find;
+  using Base::operator[];
+  using Base::bucket_count;
+  using Base::load_factor;
+  using Base::max_load_factor;
+  using Base::get_allocator;
+  using Base::hash_function;
+  using Base::key_eq;
+};
+template <typename K, typename V, typename H, typename E, typename A,
+          typename Predicate>
+typename flat_hash_map<K, V, H, E, A>::size_type erase_if(
+    flat_hash_map<K, V, H, E, A>& c, Predicate pred) {
+  return container_internal::EraseIf(pred, &c);
+}
+template <typename K, typename V, typename H, typename E, typename A>
+void swap(flat_hash_map<K, V, H, E, A>& x,
+          flat_hash_map<K, V, H, E, A>& y) noexcept(noexcept(x.swap(y))) {
+  x.swap(y);
+}
+namespace container_internal {
+template <typename K, typename V, typename H, typename E, typename A,
+          typename Function>
+decay_t<Function> c_for_each_fast(const flat_hash_map<K, V, H, E, A>& c,
+                                  Function&& f) {
+  container_internal::ForEach(f, &c);
+  return f;
+}
+template <typename K, typename V, typename H, typename E, typename A,
+          typename Function>
+decay_t<Function> c_for_each_fast(flat_hash_map<K, V, H, E, A>& c,
+                                  Function&& f) {
+  container_internal::ForEach(f, &c);
+  return f;
+}
+template <typename K, typename V, typename H, typename E, typename A,
+          typename Function>
+decay_t<Function> c_for_each_fast(flat_hash_map<K, V, H, E, A>&& c,
+                                  Function&& f) {
+  container_internal::ForEach(f, &c);
+  return f;
+}
+}  
+namespace container_internal {
+template <class K, class V>
+struct FlatHashMapPolicy {
+  using slot_policy = container_internal::map_slot_policy<K, V>;
+  using slot_type = typename slot_policy::slot_type;
+  using key_type = K;
+  using mapped_type = V;
+  using init_type = std::pair< key_type, mapped_type>;
+  template <class Allocator, class... Args>
+  static void construct(Allocator* alloc, slot_type* slot, Args&&... args) {
+    slot_policy::construct(alloc, slot, std::forward<Args>(args)...);
+  }
+  template <class Allocator>
+  static auto destroy(Allocator* alloc, slot_type* slot) {
+    return slot_policy::destroy(alloc, slot);
+  }
+  template <class Allocator>
+  static auto transfer(Allocator* alloc, slot_type* new_slot,
+                       slot_type* old_slot) {
+    return slot_policy::transfer(alloc, new_slot, old_slot);
+  }
+  template <class F, class... Args>
+  static decltype(absl::container_internal::DecomposePair(
+      std::declval<F>(), std::declval<Args>()...))
+  apply(F&& f, Args&&... args) {
+    return absl::container_internal::DecomposePair(std::forward<F>(f),
+                                                   std::forward<Args>(args)...);
+  }
+  template <class Hash>
+  static constexpr HashSlotFn get_hash_slot_fn() {
+    return memory_internal::IsLayoutCompatible<K, V>::value
+               ? &TypeErasedApplyToSlotFn<Hash, K>
+               : nullptr;
+  }
+  static size_t space_used(const slot_type*) { return 0; }
+  static std::pair<const K, V>& element(slot_type* slot) { return slot->value; }
+  static V& value(std::pair<const K, V>* kv) { return kv->second; }
+  static const V& value(const std::pair<const K, V>* kv) { return kv->second; }
+};
+}  
+namespace container_algorithm_internal {
+template <class Key, class T, class Hash, class KeyEqual, class Allocator>
+struct IsUnorderedContainer<
+    absl::flat_hash_map<Key, T, Hash, KeyEqual, Allocator>> : std::true_type {};
+}  
+ABSL_NAMESPACE_END
+}  
+#endif  

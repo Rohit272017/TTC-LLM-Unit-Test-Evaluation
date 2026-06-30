@@ -1,0 +1,106 @@
+#ifndef ABSL_CONTAINER_INTERNAL_HASH_POLICY_TRAITS_H_
+#define ABSL_CONTAINER_INTERNAL_HASH_POLICY_TRAITS_H_
+#include <cstddef>
+#include <memory>
+#include <new>
+#include <type_traits>
+#include <utility>
+#include "absl/container/internal/common_policy_traits.h"
+#include "absl/meta/type_traits.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace container_internal {
+template <class Policy, class = void>
+struct hash_policy_traits : common_policy_traits<Policy> {
+  using key_type = typename Policy::key_type;
+ private:
+  struct ReturnKey {
+#if defined(__cpp_lib_launder) && __cpp_lib_launder >= 201606
+    template <class Key,
+              absl::enable_if_t<std::is_lvalue_reference<Key>::value, int> = 0>
+    static key_type& Impl(Key&& k, int) {
+      return *std::launder(
+          const_cast<key_type*>(std::addressof(std::forward<Key>(k))));
+    }
+#endif
+    template <class Key>
+    static Key Impl(Key&& k, char) {
+      return std::forward<Key>(k);
+    }
+    template <class Key, class... Args>
+    auto operator()(Key&& k, const Args&...) const
+        -> decltype(Impl(std::forward<Key>(k), 0)) {
+      return Impl(std::forward<Key>(k), 0);
+    }
+  };
+  template <class P = Policy, class = void>
+  struct ConstantIteratorsImpl : std::false_type {};
+  template <class P>
+  struct ConstantIteratorsImpl<P, absl::void_t<typename P::constant_iterators>>
+      : P::constant_iterators {};
+ public:
+  using slot_type = typename Policy::slot_type;
+  using init_type = typename Policy::init_type;
+  using reference = decltype(Policy::element(std::declval<slot_type*>()));
+  using pointer = typename std::remove_reference<reference>::type*;
+  using value_type = typename std::remove_reference<reference>::type;
+  using constant_iterators = ConstantIteratorsImpl<>;
+  template <class P = Policy>
+  static size_t space_used(const slot_type* slot) {
+    return P::space_used(slot);
+  }
+  template <class F, class... Ts, class P = Policy>
+  static auto apply(F&& f, Ts&&... ts)
+      -> decltype(P::apply(std::forward<F>(f), std::forward<Ts>(ts)...)) {
+    return P::apply(std::forward<F>(f), std::forward<Ts>(ts)...);
+  }
+  template <class P = Policy>
+  static auto mutable_key(slot_type* slot)
+      -> decltype(P::apply(ReturnKey(), hash_policy_traits::element(slot))) {
+    return P::apply(ReturnKey(), hash_policy_traits::element(slot));
+  }
+  template <class T, class P = Policy>
+  static auto value(T* elem) -> decltype(P::value(elem)) {
+    return P::value(elem);
+  }
+  using HashSlotFn = size_t (*)(const void* hash_fn, void* slot);
+  template <class Hash>
+  static constexpr HashSlotFn get_hash_slot_fn() {
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress"
+#endif
+    return Policy::template get_hash_slot_fn<Hash>() == nullptr
+               ? &hash_slot_fn_non_type_erased<Hash>
+               : Policy::template get_hash_slot_fn<Hash>();
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+  }
+  static constexpr bool soo_enabled() { return soo_enabled_impl(Rank1{}); }
+ private:
+  template <class Hash>
+  struct HashElement {
+    template <class K, class... Args>
+    size_t operator()(const K& key, Args&&...) const {
+      return h(key);
+    }
+    const Hash& h;
+  };
+  template <class Hash>
+  static size_t hash_slot_fn_non_type_erased(const void* hash_fn, void* slot) {
+    return Policy::apply(HashElement<Hash>{*static_cast<const Hash*>(hash_fn)},
+                         Policy::element(static_cast<slot_type*>(slot)));
+  }
+  struct Rank0 {};
+  struct Rank1 : Rank0 {};
+  template <class P = Policy>
+  static constexpr auto soo_enabled_impl(Rank1) -> decltype(P::soo_enabled()) {
+    return P::soo_enabled();
+  }
+  static constexpr bool soo_enabled_impl(Rank0) { return true; }
+};
+}  
+ABSL_NAMESPACE_END
+}  
+#endif  

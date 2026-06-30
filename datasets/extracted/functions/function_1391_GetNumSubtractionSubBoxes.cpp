@@ -1,0 +1,78 @@
+#include "tensorstore/internal/box_difference.h"
+#include <cassert>
+#include <limits>
+#include "tensorstore/box.h"
+#include "tensorstore/index.h"
+#include "tensorstore/index_interval.h"
+#include "tensorstore/internal/integer_overflow.h"
+namespace tensorstore {
+namespace internal {
+namespace {
+Index GetNumSubtractionSubBoxes(BoxView<> outer, BoxView<> inner) {
+  assert(outer.rank() == inner.rank());
+  const DimensionIndex rank = outer.rank();
+  Index total_count = 1;
+  for (DimensionIndex i = 0; i < rank; ++i) {
+    IndexInterval outer_interval = outer[i];
+    IndexInterval inner_interval = inner[i];
+    Index num_parts = 1;
+    if (Intersect(outer_interval, inner_interval).empty()) {
+      return 1;
+    }
+    if (outer_interval.inclusive_min() < inner_interval.inclusive_min()) {
+      ++num_parts;
+    }
+    if (outer_interval.inclusive_max() > inner_interval.inclusive_max()) {
+      ++num_parts;
+    }
+    total_count *= num_parts;
+  }
+  return total_count - 1;
+}
+}  
+BoxDifference::BoxDifference(BoxView<> outer, BoxView<> inner)
+    : outer_(outer),
+      inner_(inner),
+      num_sub_boxes_(GetNumSubtractionSubBoxes(outer, inner)) {}
+void BoxDifference::GetSubBox(Index sub_box_index, MutableBoxView<> out) const {
+  const DimensionIndex rank = out.rank();
+  assert(rank == outer_.rank());
+  assert(sub_box_index >= 0 && sub_box_index < num_sub_boxes_);
+  ++sub_box_index;
+  for (DimensionIndex i = 0; i < rank; ++i) {
+    IndexInterval outer_interval = outer_[i];
+    IndexInterval inner_interval = inner_[i];
+    Index num_parts = 1;
+    IndexInterval intersection = Intersect(outer_interval, inner_interval);
+    if (intersection.empty()) {
+      out.DeepAssign(outer_);
+      return;
+    }
+    const bool has_before =
+        outer_interval.inclusive_min() < inner_interval.inclusive_min();
+    const bool has_after =
+        outer_interval.inclusive_max() > inner_interval.inclusive_max();
+    if (has_before) ++num_parts;
+    if (has_after) ++num_parts;
+    const Index part_i = sub_box_index % num_parts;
+    switch (part_i) {
+      case 0:
+        out[i] = intersection;
+        break;
+      case 1:
+        if (has_before) {
+          out[i] = IndexInterval::UncheckedHalfOpen(
+              outer_interval.inclusive_min(), inner_interval.inclusive_min());
+          break;
+        }
+        [[fallthrough]];
+      case 2:
+        out[i] = IndexInterval::UncheckedHalfOpen(
+            inner_interval.exclusive_max(), outer_interval.exclusive_max());
+        break;
+    }
+    sub_box_index /= num_parts;
+  }
+}
+}  
+}  

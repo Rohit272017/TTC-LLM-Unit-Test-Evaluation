@@ -1,0 +1,210 @@
+#include "xla/service/gpu/fusions/reduction_base.h"
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <variant>
+#include <vector>
+#include "absl/algorithm/container.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/container/inlined_vector.h"
+#include "absl/container/node_hash_map.h"
+#include "absl/log/check.h"
+#include "absl/log/log.h"
+#include "absl/types/span.h"
+#include "llvm/ADT/STLExtras.h"
+#include "mlir/IR/AffineExpr.h"
+#include "xla/hlo/ir/hlo_instruction.h"
+#include "xla/hlo/utils/hlo_query.h"
+#include "xla/primitive_util.h"
+#include "xla/service/gpu/fusions/fusion_emitter.h"
+#include "xla/service/gpu/gpu_fusible.h"
+#include "xla/service/gpu/hlo_fusion_analysis.h"
+#include "xla/service/gpu/hlo_traversal.h"
+#include "xla/service/gpu/ir_emission_utils.h"
+#include "xla/service/gpu/model/indexing_map.h"
+#include "xla/service/gpu/reduction_utils.h"
+#include "xla/shape.h"
+#include "xla/stream_executor/device_description.h"
+#include "xla/union_find.h"
+#include "xla/util.h"
+#include "xla/xla_data.pb.h"
+namespace xla {
+namespace gpu {
+int RowReductionGetRowsPerWarp(int reduced_dimension_size) {
+  if (WarpSize() % reduced_dimension_size != 0 ||
+      reduced_dimension_size >= WarpSize()) {
+    return 1;
+  }
+  return WarpSize() / reduced_dimension_size;
+}
+int GetVectorSize(const HloFusionAnalysis& analysis,
+                  const ReductionDimensions& reduction_dimensions,
+                  int num_threads, Vector3 reduction_tiling) {
+  int64_t minor_dim = reduction_dimensions.dimensions.back();
+  if (minor_dim % 2 != 0) {
+    return 1;
+  }
+  if (num_threads * 2 > minor_dim) {
+    return 1;
+  }
+  if (MayPreventVectorization(analysis.fusion())) {
+    return 1;
+  }
+  if (reduction_dimensions.is_row_reduction) {
+    constexpr int kRowMinorReduced =
+        ReductionDimensions::kRowMinorReducedDimension;
+    const auto* cuda_cc = std::get_if<se::CudaComputeCapability>(
+        &analysis.device_info().gpu_compute_capability());
+    if (cuda_cc == nullptr) return 1;
+    if (cuda_cc->IsAtLeast(se::CudaComputeCapability::VOLTA)) return 2;
+    if (cuda_cc->IsAtLeast(se::CudaComputeCapability::PASCAL_)) {
+      return analysis.input_output_info().smallest_input_dtype_bits <= 32 &&
+                     reduction_dimensions.dimensions[kRowMinorReduced] %
+                             (reduction_tiling[kRowMinorReduced] *
+                              num_threads) ==
+                         0
+                 ? 2
+                 : 1;
+    }
+    return 1;
+  }
+  return 1;
+}
+int GetVectorSizeForMlir(const HloFusionAnalysis& analysis, int64_t minor_dim,
+                         int num_threads) {
+  if (minor_dim % 2 != 0) {
+    return 1;
+  }
+  if (num_threads * 2 > minor_dim) {
+    return 1;
+  }
+  for (HloInstructionAdaptor hero : analysis.fusion_heroes()) {
+    for (HloInstructionAdaptor operand : hero.GetOperands()) {
+      if (primitive_util::IsComplexType(operand.shape().element_type())) {
+        return 1;
+      }
+    }
+  }
+  if (analysis.input_output_info().smallest_input_dtype_bits >= 64) {
+    return 1;
+  }
+  if (analysis.input_output_info().smallest_input_dtype_bits >= 32) {
+    return 2;
+  }
+  if (num_threads * 4 > minor_dim) {
+    return 2;
+  }
+  return minor_dim % 4 == 0 ? 4 : 2;
+}
+ReductionGroups GroupDisjointReductions(const HloFusionAnalysis& analysis,
+                                        bool for_mlir) {
+  const int num_fusion_outputs = analysis.fusion_root_count();
+  CHECK_NE(0, num_fusion_outputs);
+  if (num_fusion_outputs == 1) {
+    return {{{&analysis.fusion_root(0).instruction()}}, {0}, {true}};
+  }
+  absl::node_hash_map<HloInstructionAdaptor, UnionFind<HloInstructionAdaptor>>
+      disjoint_sets;
+  UnionFind<HloInstructionAdaptor>* first_non_reduction_root = nullptr;
+  absl::node_hash_map<HloInstructionAdaptor,
+                      absl::flat_hash_set<HloInstructionAdaptor>>
+      reachable_outputs;
+  absl::flat_hash_set<HloInstructionAdaptor> roots_with_reduction;
+  absl::flat_hash_map<const HloInstruction*, int> root_indices;
+  const auto& roots = analysis.fusion().GetRoots();
+  ReductionGroups result;
+  result.group_id_per_root.resize(roots.size());
+  result.is_reduction_root.reserve(roots.size());
+  for (auto [root, hero] : llvm::zip(roots, analysis.fusion_heroes())) {
+    int index = root_indices.size();
+    root_indices[&root.instruction()] = index;
+    auto [it, inserted] = disjoint_sets.try_emplace(root, root);
+    CHECK(inserted) << "Duplicate root " << root.ToString();  
+    reachable_outputs[root].insert(root);
+    result.is_reduction_root.push_back(
+        IsRealReductionHero(root.instruction(), hero.instruction()));
+    if (result.is_reduction_root.back()) {
+      roots_with_reduction.insert(root);
+    } else if (first_non_reduction_root != nullptr) {
+      first_non_reduction_root->Merge(&it->second);
+    } else {
+      first_non_reduction_root = &it->second;
+    }
+  }
+  absl::flat_hash_set<HloInstructionAdaptor> instructions;
+  for (const HloInstruction* operand : analysis.fusion().GetParameters()) {
+    instructions.insert(HloInstructionAdaptor{*operand, &analysis.fusion()});
+  }
+  auto visit = [&](absl::Span<const HloInstructionAdaptor> roots) {
+    HloBfsConsumersFirstTraversal(
+        roots, analysis.fusion(), [&](HloInstructionAdaptor consumer) {
+          auto& consumer_reachable = reachable_outputs[consumer];
+          for (auto producer : consumer.GetOperands()) {
+            reachable_outputs[producer].insert(consumer_reachable.begin(),
+                                               consumer_reachable.end());
+          }
+          instructions.insert(consumer);
+          return TraversalResult::kAdvance;
+        });
+  };
+  if (for_mlir) {
+    for (auto root : roots) {
+      visit({root});
+    }
+  } else {
+    visit(roots);
+  }
+  for (auto instr : instructions) {
+    const auto& reachable = reachable_outputs[instr];
+    std::vector<HloInstructionAdaptor> reached_output_ids;
+    bool added_to_reduce = false;
+    for (auto output : roots) {
+      bool has_real_hero = roots_with_reduction.contains(output);
+      if (has_real_hero &&
+          (hlo_query::IsBroadcastedConstantOrScalar(instr.instruction()))) {
+        if (added_to_reduce) {
+          VLOG(3) << "Skip broadcasted constant or scalar " << instr.ToString();
+          continue;
+        }
+      }
+      if (reachable.contains(output)) {
+        VLOG(3) << "Reaching " << output.ToString() << " from "
+                << instr.ToString();
+        reached_output_ids.push_back(output);
+        if (has_real_hero) {
+          added_to_reduce = true;
+        }
+      }
+    }
+    auto& first_reached_output = disjoint_sets.at(reached_output_ids.front());
+    for (size_t j = 1; j < reached_output_ids.size(); ++j) {
+      first_reached_output.Merge(&disjoint_sets.at(reached_output_ids[j]));
+    }
+  }
+  ConstHloInstructionMap<std::vector<const HloInstruction*>> group_map;
+  for (auto root : roots) {
+    group_map[&disjoint_sets.at(root).Get().instruction()].push_back(
+        &root.instruction());
+  }
+  result.grouped_roots.reserve(group_map.size());
+  absl::c_for_each(group_map, [&](auto& it) {
+    for (auto* root : it.second) {
+      result.group_id_per_root[root_indices[root]] =
+          result.grouped_roots.size();
+    }
+    result.grouped_roots.emplace_back(std::move(it.second));
+  });
+  return result;
+}
+void AddGroupIdConstraint(IndexingMap& map, int64_t root_index,
+                          const ReductionGroups& groups) {
+  int group_index = groups.group_id_per_root[root_index];
+  map.AddConstraint(
+      mlir::getAffineDimExpr(KernelFusionInterface::kIndexingMapBlockIdxDims[1],
+                             map.GetMLIRContext()),
+      {group_index, group_index});
+}
+}  
+}  

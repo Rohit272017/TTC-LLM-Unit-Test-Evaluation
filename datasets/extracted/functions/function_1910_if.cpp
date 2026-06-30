@@ -1,0 +1,57 @@
+#include "tensorstore/internal/lock_collection.h"
+namespace tensorstore {
+namespace internal {
+bool LockCollection::MutexSharedLockFunction(void* mutex, bool lock)
+    ABSL_NO_THREAD_SAFETY_ANALYSIS {
+  auto& m = *static_cast<absl::Mutex*>(mutex);
+  if (lock) {
+    m.ReaderLock();
+  } else {
+    m.ReaderUnlock();
+  }
+  return true;
+}
+bool LockCollection::MutexExclusiveLockFunction(void* mutex, bool lock)
+    ABSL_NO_THREAD_SAFETY_ANALYSIS {
+  auto& m = *static_cast<absl::Mutex*>(mutex);
+  if (lock) {
+    m.WriterLock();
+  } else {
+    m.WriterUnlock();
+  }
+  return true;
+}
+bool LockCollection::try_lock() {
+  if (locks_.size() > 1) {
+    std::sort(locks_.begin(), locks_.end(), [](const Entry& a, const Entry& b) {
+      return a.tagged_pointer < b.tagged_pointer;
+    });
+    locks_.erase(std::unique(locks_.begin(), locks_.end(),
+                             [](const Entry& a, const Entry& b) {
+                               return a.data() == b.data();
+                             }),
+                 locks_.end());
+  }
+  size_t i = 0, size = locks_.size();
+  auto* locks = locks_.data();
+  for (; i < size; ++i) {
+    auto& entry = locks[i];
+    if (!entry.lock_function(entry.data(), true)) {
+      while (i > 0) {
+        --i;
+        auto& prev_entry = locks[i];
+        prev_entry.lock_function(prev_entry.data(), false);
+      }
+      return false;
+    }
+  }
+  return true;
+}
+void LockCollection::unlock() {
+  for (const auto& entry : locks_) {
+    entry.lock_function(entry.data(), false);
+  }
+}
+void LockCollection::clear() { locks_.clear(); }
+}  
+}  

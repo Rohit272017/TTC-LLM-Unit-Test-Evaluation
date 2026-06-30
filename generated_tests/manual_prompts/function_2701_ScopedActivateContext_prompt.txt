@@ -1,0 +1,70 @@
+
+You are a software testing expert.
+
+Generate Google Test unit tests for the following C++ function.
+
+Focus on:
+- Boundary Value Analysis (BVA)
+- Equivalence Class Partitioning (ECP)
+- valid inputs
+- invalid inputs
+- edge cases
+
+C++ Function:
+
+#include "xla/stream_executor/gpu/scoped_activate_context.h"
+#include "absl/log/check.h"
+#include "xla/stream_executor/gpu/context.h"
+#include "xla/stream_executor/gpu/gpu_executor.h"
+#include "xla/stream_executor/stream_executor.h"
+#include "tsl/platform/logging.h"
+namespace stream_executor::gpu {
+namespace {
+thread_local struct ThreadLocalData {
+  Context* context;
+  int device_ordinal;
+  int depth;
+} tls_data = {};
+}  
+ScopedActivateContext::ScopedActivateContext(GpuExecutor* gpu_executor)
+    : ScopedActivateContext(gpu_executor->gpu_context()) {}
+ScopedActivateContext::ScopedActivateContext(StreamExecutor* executor)
+    : ScopedActivateContext(ExtractGpuExecutor(executor)) {}
+ScopedActivateContext::ScopedActivateContext(gpu::Context* gpu_context) {
+  auto* tls = &tls_data;
+  if (tls->depth == 0) {
+    VLOG(3) << "ScopedActivateContext switching to "
+            << gpu_context->device_ordinal();
+    gpu_context->SetActive();
+    tls->depth = 1;
+    tls->device_ordinal = gpu_context->device_ordinal();
+    tls->context = gpu_context;
+    to_restore_ = nullptr;
+    return;
+  }
+  tls->depth++;
+  if (tls->device_ordinal == gpu_context->device_ordinal()) {
+    DCHECK(gpu_context->IsActive());
+    return;
+  }
+  VLOG(3) << "ScopedActivateContext switching context from "
+          << tls->device_ordinal << " to " << gpu_context->device_ordinal();
+  to_restore_ = tls->context;
+  gpu_context->SetActive();
+  tls->device_ordinal = gpu_context->device_ordinal();
+  tls->context = gpu_context;
+}
+ScopedActivateContext::~ScopedActivateContext() {
+  auto* tls = &tls_data;
+  tls->depth--;
+  DCHECK_GE(tls->depth, 0);
+  if (to_restore_ == nullptr) {
+    return;
+  }
+  to_restore_->SetActive();
+  tls->device_ordinal = to_restore_->device_ordinal();
+  tls->context = to_restore_;
+}
+}  
+
+Return only Google Test code.

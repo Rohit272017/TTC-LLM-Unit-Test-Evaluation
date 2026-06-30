@@ -1,0 +1,93 @@
+#ifndef ABSL_RANDOM_INTERNAL_TRAITS_H_
+#define ABSL_RANDOM_INTERNAL_TRAITS_H_
+#include <cstdint>
+#include <limits>
+#include <type_traits>
+#include "absl/base/config.h"
+#include "absl/numeric/bits.h"
+#include "absl/numeric/int128.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace random_internal {
+template <typename A, typename B>
+class is_widening_convertible {
+  template <class T>
+  static constexpr int rank() {
+    return !std::numeric_limits<T>::is_integer +
+           std::numeric_limits<T>::is_signed;
+  }
+ public:
+  static constexpr bool value =
+      std::numeric_limits<A>::digits <= std::numeric_limits<B>::digits &&
+      rank<A>() <= rank<B>();
+};
+template <typename T>
+struct IsIntegral : std::is_integral<T> {};
+template <>
+struct IsIntegral<absl::int128> : std::true_type {};
+template <>
+struct IsIntegral<absl::uint128> : std::true_type {};
+template <typename T>
+struct MakeUnsigned : std::make_unsigned<T> {};
+template <>
+struct MakeUnsigned<absl::int128> {
+  using type = absl::uint128;
+};
+template <>
+struct MakeUnsigned<absl::uint128> {
+  using type = absl::uint128;
+};
+template <typename T>
+struct IsUnsigned : std::is_unsigned<T> {};
+template <>
+struct IsUnsigned<absl::int128> : std::false_type {};
+template <>
+struct IsUnsigned<absl::uint128> : std::true_type {};
+template <size_t N>
+struct unsigned_bits;
+template <>
+struct unsigned_bits<8> {
+  using type = uint8_t;
+};
+template <>
+struct unsigned_bits<16> {
+  using type = uint16_t;
+};
+template <>
+struct unsigned_bits<32> {
+  using type = uint32_t;
+};
+template <>
+struct unsigned_bits<64> {
+  using type = uint64_t;
+};
+template <>
+struct unsigned_bits<128> {
+  using type = absl::uint128;
+};
+struct U256 {
+  uint128 hi;
+  uint128 lo;
+};
+template <>
+struct unsigned_bits<256> {
+  using type = U256;
+};
+template <typename IntType>
+struct make_unsigned_bits {
+  using type = typename unsigned_bits<
+      std::numeric_limits<typename MakeUnsigned<IntType>::type>::digits>::type;
+};
+template <typename T>
+int BitWidth(T v) {
+  constexpr int half_bits = sizeof(T) * 8 / 2;
+  if (sizeof(T) == 16 && (v >> half_bits) != 0) {
+    return bit_width(static_cast<uint64_t>(v >> half_bits)) + half_bits;
+  } else {
+    return bit_width(static_cast<uint64_t>(v));
+  }
+}
+}  
+ABSL_NAMESPACE_END
+}  
+#endif  

@@ -1,0 +1,5 @@
+Metric,Value
+Total generated tests,60.0
+Compiled successfully,1.0
+Compile failures,59.0
+Compile success rate (%),1.67

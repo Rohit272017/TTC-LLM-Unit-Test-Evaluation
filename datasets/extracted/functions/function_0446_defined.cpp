@@ -1,0 +1,115 @@
+#ifndef ABSL_BASE_OPTIMIZATION_H_
+#define ABSL_BASE_OPTIMIZATION_H_
+#include <assert.h>
+#ifdef __cplusplus
+#include <utility>
+#endif  
+#include "absl/base/config.h"
+#include "absl/base/options.h"
+#if defined(__pnacl__)
+#define ABSL_BLOCK_TAIL_CALL_OPTIMIZATION() if (volatile int x = 0) { (void)x; }
+#elif defined(__clang__)
+#define ABSL_BLOCK_TAIL_CALL_OPTIMIZATION() __asm__ __volatile__("")
+#elif defined(__GNUC__)
+#define ABSL_BLOCK_TAIL_CALL_OPTIMIZATION() __asm__ __volatile__("")
+#elif defined(_MSC_VER)
+#include <intrin.h>
+#define ABSL_BLOCK_TAIL_CALL_OPTIMIZATION() __nop()
+#else
+#define ABSL_BLOCK_TAIL_CALL_OPTIMIZATION() if (volatile int x = 0) { (void)x; }
+#endif
+#if defined(__GNUC__)
+#if defined(__i386__) || defined(__x86_64__)
+#define ABSL_CACHELINE_SIZE 64
+#elif defined(__powerpc64__)
+#define ABSL_CACHELINE_SIZE 128
+#elif defined(__aarch64__)
+#define ABSL_CACHELINE_SIZE 64
+#elif defined(__arm__)
+#if defined(__ARM_ARCH_5T__)
+#define ABSL_CACHELINE_SIZE 32
+#elif defined(__ARM_ARCH_7A__)
+#define ABSL_CACHELINE_SIZE 64
+#endif
+#endif
+#endif
+#ifndef ABSL_CACHELINE_SIZE
+#define ABSL_CACHELINE_SIZE 64
+#endif
+#if defined(__clang__) || defined(__GNUC__)
+#define ABSL_CACHELINE_ALIGNED __attribute__((aligned(ABSL_CACHELINE_SIZE)))
+#elif defined(_MSC_VER)
+#define ABSL_CACHELINE_ALIGNED __declspec(align(ABSL_CACHELINE_SIZE))
+#else
+#define ABSL_CACHELINE_ALIGNED
+#endif
+#if ABSL_HAVE_BUILTIN(__builtin_expect) || \
+    (defined(__GNUC__) && !defined(__clang__))
+#define ABSL_PREDICT_FALSE(x) (__builtin_expect(false || (x), false))
+#define ABSL_PREDICT_TRUE(x) (__builtin_expect(false || (x), true))
+#else
+#define ABSL_PREDICT_FALSE(x) (x)
+#define ABSL_PREDICT_TRUE(x) (x)
+#endif
+#if ABSL_HAVE_BUILTIN(__builtin_trap) || \
+    (defined(__GNUC__) && !defined(__clang__))
+#define ABSL_INTERNAL_IMMEDIATE_ABORT_IMPL() __builtin_trap()
+#else
+#define ABSL_INTERNAL_IMMEDIATE_ABORT_IMPL() abort()
+#endif
+#if defined(__cpp_lib_unreachable) && __cpp_lib_unreachable >= 202202L
+#define ABSL_INTERNAL_UNREACHABLE_IMPL() std::unreachable()
+#elif defined(__GNUC__) || ABSL_HAVE_BUILTIN(__builtin_unreachable)
+#define ABSL_INTERNAL_UNREACHABLE_IMPL() __builtin_unreachable()
+#elif ABSL_HAVE_BUILTIN(__builtin_assume)
+#define ABSL_INTERNAL_UNREACHABLE_IMPL() __builtin_assume(false)
+#elif defined(_MSC_VER)
+#define ABSL_INTERNAL_UNREACHABLE_IMPL() __assume(false)
+#else
+#define ABSL_INTERNAL_UNREACHABLE_IMPL()
+#endif
+#if ABSL_OPTION_HARDENED == 1 && defined(NDEBUG)
+#define ABSL_UNREACHABLE()                \
+  do {                                    \
+    ABSL_INTERNAL_IMMEDIATE_ABORT_IMPL(); \
+    ABSL_INTERNAL_UNREACHABLE_IMPL();     \
+  } while (false)
+#else
+#define ABSL_UNREACHABLE()                       \
+  do {                                           \
+         \
+    assert(false && "ABSL_UNREACHABLE reached"); \
+    ABSL_INTERNAL_UNREACHABLE_IMPL();            \
+  } while (false)
+#endif
+#if !defined(NDEBUG)
+#define ABSL_ASSUME(cond) assert(cond)
+#elif ABSL_HAVE_BUILTIN(__builtin_assume)
+#define ABSL_ASSUME(cond) __builtin_assume(cond)
+#elif defined(_MSC_VER)
+#define ABSL_ASSUME(cond) __assume(cond)
+#elif defined(__cpp_lib_unreachable) && __cpp_lib_unreachable >= 202202L
+#define ABSL_ASSUME(cond)            \
+  do {                               \
+    if (!(cond)) std::unreachable(); \
+  } while (false)
+#elif defined(__GNUC__) || ABSL_HAVE_BUILTIN(__builtin_unreachable)
+#define ABSL_ASSUME(cond)                 \
+  do {                                    \
+    if (!(cond)) __builtin_unreachable(); \
+  } while (false)
+#else
+#define ABSL_ASSUME(cond)               \
+  do {                                  \
+    static_cast<void>(false && (cond)); \
+  } while (false)
+#endif
+#if defined(__GNUC__)
+#define ABSL_INTERNAL_UNIQUE_SMALL_NAME2(x) #x
+#define ABSL_INTERNAL_UNIQUE_SMALL_NAME1(x) ABSL_INTERNAL_UNIQUE_SMALL_NAME2(x)
+#define ABSL_INTERNAL_UNIQUE_SMALL_NAME() \
+  asm(ABSL_INTERNAL_UNIQUE_SMALL_NAME1(.absl.__COUNTER__))
+#else
+#define ABSL_INTERNAL_UNIQUE_SMALL_NAME()
+#endif
+#endif  

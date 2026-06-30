@@ -1,0 +1,63 @@
+#include "arolla/serialization_base/container_proto.h"
+#include <cstdint>
+#include <utility>
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
+#include "arolla/serialization_base/base.pb.h"
+#include "arolla/serialization_base/container.h"
+#include "arolla/util/status_macros_backport.h"
+namespace arolla::serialization_base {
+absl::StatusOr<uint64_t> ContainerProtoBuilder::Add(
+    DecodingStepProto&& decoding_step_proto) {
+  *result_.add_decoding_steps() = std::move(decoding_step_proto);
+  return result_.decoding_steps_size() - 1;
+}
+ContainerProto ContainerProtoBuilder::Finish() && {
+  result_.set_version(kContainerProtoVersion);
+  return std::move(result_);
+}
+absl::Status ProcessContainerProto(const ContainerProto& container_proto,
+                                   ContainerProcessor& container_processor) {
+  constexpr int kContainerProtoOldVersion = 1;
+  constexpr int kContainerProtoNewVersion = 2;
+  if (!container_proto.has_version()) {
+    return absl::InvalidArgumentError("missing container.version");
+  }
+  if (container_proto.version() != kContainerProtoOldVersion &&
+      container_proto.version() != kContainerProtoNewVersion) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("expected container.version to be %d or %d, got %d",
+                        kContainerProtoOldVersion, kContainerProtoNewVersion,
+                        container_proto.version()));
+  }
+  DecodingStepProto decoding_step;
+  for (int codec_index = 0; codec_index < container_proto.codecs_size();
+       ++codec_index) {
+    *decoding_step.mutable_codec() = container_proto.codecs(codec_index);
+    RETURN_IF_ERROR(
+        container_processor.OnDecodingStep(codec_index, decoding_step))
+        << "while handling codecs[" << codec_index << "]";
+  }
+  for (int decoding_step_index = 0;
+       decoding_step_index < container_proto.decoding_steps_size();
+       ++decoding_step_index) {
+    RETURN_IF_ERROR(container_processor.OnDecodingStep(
+        decoding_step_index,
+        container_proto.decoding_steps(decoding_step_index)))
+        << "while handling decoding_steps[" << decoding_step_index << "]";
+  }
+  for (int i = 0; i < container_proto.output_value_indices_size(); ++i) {
+    decoding_step.set_output_value_index(
+        container_proto.output_value_indices(i));
+    RETURN_IF_ERROR(container_processor.OnDecodingStep(0, decoding_step))
+        << "while handling output_value_indices[" << i << "]";
+  }
+  for (int i = 0; i < container_proto.output_expr_indices_size(); ++i) {
+    decoding_step.set_output_expr_index(container_proto.output_expr_indices(i));
+    RETURN_IF_ERROR(container_processor.OnDecodingStep(0, decoding_step))
+        << "while handling output_expr_indices[" << i << "]";
+  }
+  return absl::OkStatus();
+}
+}  

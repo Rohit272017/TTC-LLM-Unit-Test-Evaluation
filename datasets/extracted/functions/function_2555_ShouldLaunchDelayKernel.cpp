@@ -1,0 +1,654 @@
+#include "xla/stream_executor/cuda/cuda_executor.h"
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <variant>
+#include "absl/log/check.h"
+#include "absl/numeric/int128.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/ascii.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/types/span.h"
+#include "third_party/gpus/cuda/include/cuda.h"
+#include "xla/stream_executor/blas.h"
+#include "xla/stream_executor/command_buffer.h"
+#include "xla/stream_executor/cuda/cuda_collectives.h"
+#include "xla/stream_executor/cuda/cuda_event.h"
+#include "xla/stream_executor/cuda/cuda_kernel.h"
+#include "xla/stream_executor/cuda/cuda_platform_id.h"
+#include "xla/stream_executor/cuda/cuda_runtime.h"
+#include "xla/stream_executor/cuda/cuda_status.h"
+#include "xla/stream_executor/cuda/cuda_version_parser.h"
+#include "xla/stream_executor/cuda/delay_kernel.h"
+#include "xla/stream_executor/device_description.h"
+#include "xla/stream_executor/device_memory.h"
+#include "xla/stream_executor/dnn.h"
+#include "xla/stream_executor/event.h"
+#include "xla/stream_executor/event_based_timer.h"
+#include "xla/stream_executor/fft.h"
+#include "xla/stream_executor/gpu/context.h"
+#include "xla/stream_executor/gpu/gpu_command_buffer.h"
+#include "xla/stream_executor/gpu/gpu_driver.h"
+#include "xla/stream_executor/gpu/gpu_event.h"
+#include "xla/stream_executor/gpu/gpu_kernel.h"
+#include "xla/stream_executor/gpu/gpu_semaphore.h"
+#include "xla/stream_executor/gpu/gpu_stream.h"
+#include "xla/stream_executor/gpu/gpu_timer.h"
+#include "xla/stream_executor/gpu/gpu_types.h"
+#include "xla/stream_executor/gpu/read_numa_node.h"
+#include "xla/stream_executor/kernel.h"
+#include "xla/stream_executor/kernel_spec.h"
+#include "xla/stream_executor/launch_dim.h"
+#include "xla/stream_executor/module_spec.h"
+#include "xla/stream_executor/platform.h"
+#include "xla/stream_executor/plugin_registry.h"
+#include "xla/stream_executor/semantic_version.h"
+#include "xla/stream_executor/stream.h"
+#include "xla/stream_executor/stream_executor.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/fingerprint.h"
+#include "tsl/platform/logging.h"
+#include "tsl/platform/statusor.h"
+namespace stream_executor {
+namespace gpu {
+namespace {
+bool ShouldLaunchDelayKernel() {
+  static bool value = [] {
+    const char* blocking = std::getenv("CUDA_LAUNCH_BLOCKING");
+    return !blocking || std::string_view{blocking} != "1";
+  }();
+  return value;
+}
+absl::Status FuncGetAttribute(CUfunction_attribute attribute, CUfunction func,
+                              int* attribute_value) {
+  return cuda::ToStatus(
+      cuFuncGetAttribute(attribute_value, attribute, func),
+      absl::StrCat("Failed to query kernel attribute: ", attribute));
+}
+}  
+static CUdeviceptr AsCudaDevicePtr(const DeviceMemoryBase& gpu_mem) {
+  return reinterpret_cast<CUdeviceptr>(gpu_mem.opaque());
+}
+static CUdeviceptr AsCudaDevicePtr(DeviceMemoryBase* gpu_mem) {
+  return AsCudaDevicePtr(*gpu_mem);
+}
+CudaExecutor::~CudaExecutor() {
+  CHECK(kernel_to_gpu_binary_.empty()) << "GpuExecutor has live kernels.";
+  CHECK(gpu_binary_to_module_.empty()) << "GpuExecutor has loaded modules.";
+  if (gpu_context() != nullptr) {
+    GpuDriver::DestroyContext(gpu_context());
+  }
+}
+absl::Status CudaExecutor::Init() {
+  TF_RETURN_IF_ERROR(GpuDriver::Init());
+  TF_RETURN_IF_ERROR(GpuDriver::GetDevice(device_ordinal(), &device_));
+  Context* context;
+  TF_RETURN_IF_ERROR(
+      GpuDriver::CreateContext(device_ordinal(), device_, &context));
+  set_context(context);
+  TF_RETURN_IF_ERROR(
+      GpuDriver::GetComputeCapability(&cc_major_, &cc_minor_, device_));
+  TF_ASSIGN_OR_RETURN(delay_kernels_supported_, DelayKernelIsSupported());
+  return absl::OkStatus();
+}
+absl::StatusOr<bool> CudaExecutor::DelayKernelIsSupported() {
+  TF_ASSIGN_OR_RETURN(int status,
+                      GpuDriver::GetDeviceAttribute(
+                          CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING, device_));
+  return static_cast<bool>(status);
+}
+absl::Status CudaExecutor::LoadModuleFromCuBin(const char* cubin,
+                                               CUmodule* module) {
+  uint64_t module_refcount;
+  std::tie(*module, module_refcount) = gpu_binary_to_module_[cubin];
+  if (*module == nullptr) {
+    TF_RETURN_IF_ERROR(GpuDriver::LoadCubin(gpu_context(), cubin, module));
+    module_refcount = 1;
+    VLOG(3) << "Loaded CUBIN " << static_cast<const void*>(cubin)
+            << " as module " << *module;
+  } else {
+    ++module_refcount;
+    VLOG(3) << "CUBIN " << static_cast<const void*>(cubin)
+            << " is already loaded as module " << *module;
+  }
+  gpu_binary_to_module_[cubin] = {*module, module_refcount};
+  return absl::OkStatus();
+}
+absl::Status CudaExecutor::LoadModuleFromPtx(const char* ptx,
+                                             CUmodule* module) {
+  uint64_t module_refcount;
+  std::tie(*module, module_refcount) = gpu_binary_to_module_[ptx];
+  if (*module == nullptr) {
+    TF_RETURN_IF_ERROR(GpuDriver::LoadPtx(gpu_context(), ptx, module));
+    VLOG(3) << "Loaded PTX " << static_cast<const void*>(ptx) << " as module "
+            << *module;
+    module_refcount = 1;
+  } else {
+    ++module_refcount;
+    VLOG(3) << "PTX " << static_cast<const void*>(ptx)
+            << " is already loaded as module " << module;
+  }
+  gpu_binary_to_module_[ptx] = {*module, module_refcount};
+  return absl::OkStatus();
+}
+absl::Status CudaExecutor::LoadModuleFromHsaco(const char* hsaco,
+                                               CUmodule* module) {
+  return absl::InternalError(
+      "Feature not supported on CUDA platform (LoadModuleFromHsaco)");
+}
+absl::StatusOr<std::unique_ptr<Kernel>> CudaExecutor::LoadKernel(
+    const MultiKernelLoaderSpec& spec) {
+  auto cuda_kernel = std::make_unique<CudaKernel>(this);
+  CUmodule module;
+  const std::string* kernel_name;
+  if (spec.has_cuda_cubin_in_memory()) {
+    absl::MutexLock lock{&in_memory_modules_mu_};
+    kernel_name = &spec.cuda_cubin_in_memory().kernel_name();
+    const char* cubin = reinterpret_cast<const char*>(
+        spec.cuda_cubin_in_memory().cubin_bytes().data());
+    TF_RETURN_IF_ERROR(LoadModuleFromCuBin(cubin, &module));
+    kernel_to_gpu_binary_[cuda_kernel.get()] = cubin;
+  } else if (spec.has_cuda_ptx_in_memory()) {
+    kernel_name = &spec.cuda_ptx_in_memory().kernel_name();
+    if (cc_major_ == 0 && cc_minor_ == 0) {
+      return absl::InternalError("Compute capability not set");
+    }
+    const char* ptx = spec.cuda_ptx_in_memory().text(cc_major_, cc_minor_);
+    if (ptx == nullptr) {
+      ptx = spec.cuda_ptx_in_memory().default_text();
+    }
+    if (ptx == nullptr) {
+      LOG(FATAL) << "Loader spec has no ptx for kernel " << *kernel_name;
+    }
+    absl::MutexLock lock{&in_memory_modules_mu_};
+    TF_RETURN_IF_ERROR(LoadModuleFromPtx(ptx, &module));
+    kernel_to_gpu_binary_[cuda_kernel.get()] = ptx;
+  } else if (spec.has_in_process_symbol()) {
+    kernel_name = &spec.in_process_symbol().kernel_name();
+    void* symbol = spec.in_process_symbol().symbol();
+    VLOG(2) << "Resolve CUDA kernel " << *kernel_name
+            << " from symbol pointer: " << symbol;
+    TF_ASSIGN_OR_RETURN(
+        GpuFunctionHandle function,
+        CudaRuntime::GetFuncBySymbol(spec.in_process_symbol().symbol()));
+    cuda_kernel->set_gpu_function(function);
+  } else {
+    return absl::InternalError("No method of loading CUDA kernel provided");
+  }
+  VLOG(3) << "LoadKernel on kernel : " << *kernel_name;
+  if (!spec.has_in_process_symbol()) {
+    VLOG(2) << "getting function " << *kernel_name << " from module " << module;
+    GpuFunctionHandle function;
+    TF_RETURN_IF_ERROR(GpuDriver::GetModuleFunction(
+        gpu_context(), module, kernel_name->c_str(), &function));
+    cuda_kernel->set_gpu_function(function);
+  }
+  cuda_kernel->set_name(*kernel_name);
+  cuda_kernel->set_arity(spec.arity());
+  KernelMetadata kernel_metadata;
+  TF_RETURN_IF_ERROR(GetKernelMetadata(cuda_kernel.get(), &kernel_metadata));
+  cuda_kernel->set_metadata(kernel_metadata);
+  cuda_kernel->set_name(*kernel_name);
+  cuda_kernel->set_args_packing(spec.kernel_args_packing());
+  return std::move(cuda_kernel);
+}
+absl::StatusOr<std::unique_ptr<EventBasedTimer>>
+CudaExecutor::CreateEventBasedTimer(GpuStream* stream, bool use_delay_kernel) {
+  GpuSemaphore semaphore{};
+  if (use_delay_kernel && ShouldLaunchDelayKernel() &&
+      delay_kernels_supported_) {
+    TF_ASSIGN_OR_RETURN(semaphore, LaunchDelayKernel(stream));
+  }
+  TF_ASSIGN_OR_RETURN(auto start_event, CreateGpuEvent(true));
+  TF_ASSIGN_OR_RETURN(auto stop_event, CreateGpuEvent(true));
+  TF_RETURN_IF_ERROR(start_event->Record(stream->gpu_stream()));
+  return std::make_unique<GpuTimer>(gpu_context(), std::move(start_event),
+                                    std::move(stop_event), stream,
+                                    std::move(semaphore));
+}
+bool CudaExecutor::UnloadGpuBinary(const void* gpu_binary) {
+  auto module_it = gpu_binary_to_module_.find(gpu_binary);
+  if (gpu_binary_to_module_.end() == module_it) {
+    VLOG(3) << "No loaded CUDA module for " << gpu_binary;
+    return false;
+  }
+  auto& module = module_it->second.first;
+  auto& refcount = module_it->second.second;
+  VLOG(3) << "Found CUDA module " << module << " with refcount " << refcount;
+  if (--refcount == 0) {
+    VLOG(3) << "Unloading CUDA module " << module;
+    GpuDriver::UnloadModule(gpu_context(), module);
+    gpu_binary_to_module_.erase(module_it);
+  }
+  return true;
+}
+void CudaExecutor::UnloadKernel(const Kernel* kernel) {
+  VLOG(3) << "Unloading kernel " << kernel << " : " << kernel->name();
+  absl::MutexLock lock{&in_memory_modules_mu_};
+  auto gpu_binary_it = kernel_to_gpu_binary_.find(kernel);
+  if (kernel_to_gpu_binary_.end() == gpu_binary_it) {
+    VLOG(3) << "Kernel " << kernel << " : " << kernel->name()
+            << " has never been loaded.";
+    return;
+  }
+  VLOG(3) << "Kernel " << kernel << " : " << kernel->name()
+          << " has loaded GPU code " << gpu_binary_it->second;
+  UnloadGpuBinary(gpu_binary_it->second);
+  kernel_to_gpu_binary_.erase(gpu_binary_it);
+}
+absl::Status CudaExecutor::LoadModule(const MultiModuleLoaderSpec& spec,
+                                      ModuleHandle* module_handle) {
+  CUmodule cu_module;
+  if (spec.has_cuda_cubin_in_memory()) {
+    absl::MutexLock lock{&in_memory_modules_mu_};
+    TF_RETURN_IF_ERROR(LoadModuleFromCuBin(
+        reinterpret_cast<const char*>(spec.cuda_cubin_in_memory().data()),
+        &cu_module));
+    *module_handle = ModuleHandle(const_cast<void*>(
+        static_cast<const void*>(spec.cuda_cubin_in_memory().data())));
+    return absl::OkStatus();
+  } else if (spec.has_cuda_ptx_in_memory()) {
+    if (cc_major_ == 0 && cc_minor_ == 0) {
+      return absl::InternalError("Compute capability not set");
+    }
+    if (!spec.cuda_ptx_in_memory()) {
+      return absl::InternalError("PTX not found in spec");
+    }
+    absl::MutexLock lock{&in_memory_modules_mu_};
+    TF_RETURN_IF_ERROR(
+        LoadModuleFromPtx(spec.cuda_ptx_in_memory(), &cu_module));
+    *module_handle = ModuleHandle(
+        const_cast<void*>(static_cast<const void*>(spec.cuda_ptx_in_memory())));
+    return absl::OkStatus();
+  }
+  return absl::InternalError("No method of loading CUDA module provided");
+}
+bool CudaExecutor::UnloadModule(ModuleHandle module_handle) {
+  const char* gpu_binary = reinterpret_cast<const char*>(module_handle.id());
+  absl::MutexLock lock{&in_memory_modules_mu_};
+  return UnloadGpuBinary(gpu_binary);
+}
+namespace {
+absl::uint128 Fingerprint128(const absl::string_view s) {
+  auto fp = tsl::Fingerprint128(s);
+  return absl::MakeUint128(fp.high64, fp.low64);
+}
+int fpus_per_core(int cc_major, int cc_minor) {
+  int n = 128;          
+  if (cc_major == 3) {  
+    n = 192;
+  } else if ((cc_major == 6 && cc_minor == 0) || (cc_major == 7) ||
+             (cc_major == 8 && cc_minor == 0)) {
+    n = 64;  
+  }
+  return n;
+}
+}  
+absl::StatusOr<std::shared_ptr<DeviceMemoryBase>>
+CudaExecutor::CreateOrShareConstant(Stream* stream,
+                                    absl::Span<const uint8_t> content) {
+  absl::MutexLock lock{&shared_constants_mu_};
+  absl::uint128 fingerprint = Fingerprint128(absl::string_view(
+      reinterpret_cast<const char*>(content.data()), content.size()));
+  auto insert_result = shared_constants_.insert(
+      {fingerprint, std::weak_ptr<DeviceMemoryBase>()});
+  auto it = insert_result.first;
+  bool was_already_in_cache = !insert_result.second;
+  std::shared_ptr<DeviceMemoryBase> shared_constant;
+  if (was_already_in_cache) {
+    shared_constant = it->second.lock();
+  }
+  if (shared_constant == nullptr) {
+    auto new_constant = std::make_unique<DeviceMemoryBase>(
+        Allocate(content.size(), 0));
+    if (new_constant->opaque() == nullptr) {
+      return absl::InternalError(absl::StrFormat(
+          "Failed to allocate %d bytes for new constant", content.size()));
+    }
+    TF_RETURN_IF_ERROR(
+        stream->Memcpy(new_constant.get(), content.data(), content.size()));
+    absl::Status status = stream->BlockHostUntilDone();
+    if (!status.ok()) {
+      Deallocate(new_constant.get());
+      status.Update(absl::InternalError(absl::StrFormat(
+          "Memcpy to device address %p failed", new_constant->opaque())));
+      return status;
+    }
+    shared_constant = std::shared_ptr<DeviceMemoryBase>(
+        new_constant.release(), [this](DeviceMemoryBase* p) {
+          Deallocate(p);
+          delete p;
+        });
+    it->second = std::weak_ptr<DeviceMemoryBase>(shared_constant);
+  }
+  return shared_constant;
+}
+absl::Status CudaExecutor::GetKernelMetadata(GpuKernel* cuda_kernel,
+                                             KernelMetadata* kernel_metadata) {
+  int value;
+  TF_RETURN_IF_ERROR(FuncGetAttribute(CU_FUNC_ATTRIBUTE_NUM_REGS,
+                                      cuda_kernel->gpu_function(), &value));
+  kernel_metadata->set_registers_per_thread(value);
+  TF_RETURN_IF_ERROR(FuncGetAttribute(CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES,
+                                      cuda_kernel->gpu_function(), &value));
+  kernel_metadata->set_shared_memory_bytes(value);
+  return absl::OkStatus();
+}
+DeviceMemoryBase CudaExecutor::Allocate(uint64_t size, int64_t memory_space) {
+  if (memory_space == 1) {
+    auto result =
+        CudaCollectives::CollectiveMemoryAllocate(gpu_context(), size);
+    if (!result.ok()) {
+      LOG(ERROR) << result.status();
+    }
+    return DeviceMemoryBase(nullptr, 0);
+  } else if (memory_space ==
+             static_cast<int64_t>(stream_executor::MemoryType::kHost)) {
+    return DeviceMemoryBase(GpuDriver::HostAllocate(gpu_context(), size), size);
+  }
+  CHECK_EQ(memory_space, 0);
+  return DeviceMemoryBase(GpuDriver::DeviceAllocate(gpu_context(), size), size);
+}
+void CudaExecutor::Deallocate(DeviceMemoryBase* mem) {
+  auto status_or_memory_space = GetPointerMemorySpace(mem->opaque());
+  if (!status_or_memory_space.ok()) {
+    LOG(ERROR) << status_or_memory_space.status();
+    return;
+  }
+  auto memory_space = status_or_memory_space.value();
+  if (memory_space == MemoryType::kHost) {
+    GpuDriver::HostDeallocate(gpu_context(), mem->opaque());
+  } else {
+    GpuDriver::DeviceDeallocate(gpu_context(), mem->opaque());
+  }
+}
+bool CudaExecutor::SynchronizeAllActivity() {
+  return GpuDriver::SynchronizeContext(gpu_context()).ok();
+}
+bool CudaExecutor::HostMemoryRegister(void* location, uint64_t size) {
+  VLOG(1) << "Called StreamExecutor::HostMemoryRegister(data=" << location
+          << ")";
+  return GpuDriver::HostRegister(gpu_context(), location, size);
+}
+bool CudaExecutor::HostMemoryUnregister(void* location) {
+  VLOG(1) << "Called StreamExecutor::HostUnregister(data=" << location << ")";
+  return GpuDriver::HostUnregister(gpu_context(), location);
+}
+absl::Status CudaExecutor::SynchronousMemZero(DeviceMemoryBase* location,
+                                              uint64_t size) {
+  if (reinterpret_cast<uintptr_t>(location->opaque()) % 4 == 0 &&
+      size % 4 == 0) {
+    return GpuDriver::SynchronousMemsetUint32(
+        gpu_context(), AsCudaDevicePtr(location), 0x0, size / 4);
+  }
+  return GpuDriver::SynchronousMemsetUint8(
+      gpu_context(), AsCudaDevicePtr(location), 0x0, size);
+}
+absl::Status CudaExecutor::SynchronousMemcpy(DeviceMemoryBase* gpu_dst,
+                                             const void* host_src,
+                                             uint64_t size) {
+  return GpuDriver::SynchronousMemcpyH2D(
+      gpu_context(), AsCudaDevicePtr(gpu_dst), host_src, size);
+}
+absl::Status CudaExecutor::SynchronousMemcpy(void* host_dst,
+                                             const DeviceMemoryBase& gpu_src,
+                                             uint64_t size) {
+  return GpuDriver::SynchronousMemcpyD2H(gpu_context(), host_dst,
+                                         AsCudaDevicePtr(gpu_src), size);
+}
+void CudaExecutor::DeallocateStream(Stream* stream) {
+  {
+    absl::MutexLock lock(&mu_);
+    if (dnn_ != nullptr) {
+      dnn_->NotifyStreamDestroyed(stream);
+    }
+  }
+  GpuStream* gpu_stream = AsGpuStream(stream);
+  absl::MutexLock l(&alive_gpu_streams_mu_);
+  alive_gpu_streams_.erase(gpu_stream->gpu_stream());
+}
+absl::Status CudaExecutor::BlockHostUntilDone(Stream* stream) {
+  return GpuDriver::SynchronizeStream(gpu_context(), AsGpuStreamValue(stream));
+}
+blas::BlasSupport* CudaExecutor::AsBlas() {
+  absl::MutexLock lock(&mu_);
+  if (blas_ != nullptr) {
+    return blas_.get();
+  }
+  PluginRegistry* registry = PluginRegistry::Instance();
+  absl::StatusOr<PluginRegistry::BlasFactory> status =
+      registry->GetFactory<PluginRegistry::BlasFactory>(cuda::kCudaPlatformId);
+  if (!status.ok()) {
+    LOG(ERROR) << "Unable to retrieve BLAS factory: "
+               << status.status().message();
+    return nullptr;
+  }
+  auto blas = status.value()(this);
+  blas_.reset(blas);
+  return blas_.get();
+}
+dnn::DnnSupport* CudaExecutor::AsDnn() {
+  absl::MutexLock lock(&mu_);
+  if (dnn_ != nullptr) {
+    return dnn_.get();
+  }
+  PluginRegistry* registry = PluginRegistry::Instance();
+  absl::StatusOr<PluginRegistry::DnnFactory> status =
+      registry->GetFactory<PluginRegistry::DnnFactory>(cuda::kCudaPlatformId);
+  if (!status.ok()) {
+    LOG(ERROR) << "Unable to retrieve DNN factory: "
+               << status.status().message();
+    return nullptr;
+  }
+  auto dnn = status.value()(this);
+  dnn_.reset(dnn);
+  return dnn_.get();
+}
+fft::FftSupport* CudaExecutor::AsFft() {
+  absl::MutexLock lock(&mu_);
+  if (fft_ != nullptr) {
+    return fft_.get();
+  }
+  PluginRegistry* registry = PluginRegistry::Instance();
+  absl::StatusOr<PluginRegistry::FftFactory> status =
+      registry->GetFactory<PluginRegistry::FftFactory>(cuda::kCudaPlatformId);
+  if (!status.ok()) {
+    LOG(ERROR) << "Unable to retrieve FFT factory: "
+               << status.status().message();
+    return nullptr;
+  }
+  auto fft = status.value()(this);
+  fft_.reset(fft);
+  return fft_.get();
+}
+bool CudaExecutor::CanEnablePeerAccessTo(StreamExecutor* other) {
+  GpuExecutor* cuda_other = static_cast<GpuExecutor*>(other);
+  return GpuDriver::CanEnablePeerAccess(gpu_context(),
+                                        cuda_other->gpu_context());
+}
+absl::Status CudaExecutor::EnablePeerAccessTo(StreamExecutor* other) {
+  GpuExecutor* cuda_other = static_cast<GpuExecutor*>(other);
+  return GpuDriver::EnablePeerAccess(gpu_context(), cuda_other->gpu_context());
+}
+bool CudaExecutor::DeviceMemoryUsage(int64_t* free, int64_t* total) const {
+  return GpuDriver::GetDeviceMemoryInfo(gpu_context(), free, total);
+}
+absl::StatusOr<DeviceMemoryBase> CudaExecutor::GetSymbol(
+    const std::string& symbol_name, ModuleHandle module_handle) {
+  void* mem = nullptr;
+  size_t bytes = 0;
+  CHECK(static_cast<bool>(module_handle));
+  {  
+    absl::MutexLock lock{&in_memory_modules_mu_};
+    auto it = gpu_binary_to_module_.find(module_handle.id());
+    CHECK(it != gpu_binary_to_module_.end());
+    GpuModuleHandle gpu_module_handle = it->second.first;
+    CHECK(gpu_module_handle != nullptr);
+    TF_RETURN_IF_ERROR(GpuDriver::GetModuleSymbol(
+        gpu_context(), gpu_module_handle, symbol_name.c_str(),
+        reinterpret_cast<CUdeviceptr*>(&mem), &bytes));
+    return DeviceMemoryBase(mem, bytes);
+  }
+  return absl::NotFoundError(
+      absl::StrCat("Check if module containing symbol ", symbol_name,
+                   " is loaded (module_handle = ",
+                   reinterpret_cast<uintptr_t>(module_handle.id()), ")"));
+}
+absl::Status FillBlockDimLimit(GpuDeviceHandle device,
+                               BlockDim* block_dim_limit) {
+  int x, y, z;
+  TF_RETURN_IF_ERROR(GpuDriver::GetGridLimits(&x, &y, &z, device));
+  block_dim_limit->x = x;
+  block_dim_limit->y = y;
+  block_dim_limit->z = z;
+  return absl::OkStatus();
+}
+absl::StatusOr<std::unique_ptr<GpuEvent>> CudaExecutor::CreateGpuEvent(
+    bool allow_timing) {
+  auto gpu_event = std::make_unique<CudaEvent>(gpu_context());
+  TF_RETURN_IF_ERROR(gpu_event->Init(allow_timing));
+  return std::move(gpu_event);
+}
+absl::StatusOr<std::unique_ptr<Event>> CudaExecutor::CreateEvent() {
+  return CreateGpuEvent(false);
+}
+absl::StatusOr<std::unique_ptr<Stream>> CudaExecutor::CreateStream(
+    std::optional<std::variant<StreamPriority, int>> priority) {
+  TF_ASSIGN_OR_RETURN(auto event, CreateGpuEvent(false));
+  auto stream = std::make_unique<GpuStream>(this, std::move(event), priority);
+  absl::MutexLock l(&alive_gpu_streams_mu_);
+  TF_RETURN_IF_ERROR(stream->Init());
+  auto gpu_stream = stream->gpu_stream();
+  alive_gpu_streams_[gpu_stream] = stream.get();
+  return std::move(stream);
+}
+absl::StatusOr<std::unique_ptr<CommandBuffer>>
+CudaExecutor::CreateCommandBuffer(CommandBuffer::Mode mode) {
+  VLOG(2) << "Create CUDA command buffer (CUDA graph)";
+  GpuGraphHandle graph = nullptr;
+  TF_RETURN_IF_ERROR(GpuDriver::CreateGraph(&graph));
+  return std::make_unique<GpuCommandBuffer>(mode, this, graph);
+}
+absl::Status CudaExecutor::TrimGraphMemory() {
+  return GpuDriver::DeviceGraphMemTrim(device_);
+}
+absl::StatusOr<std::unique_ptr<DeviceDescription>>
+CudaExecutor::CreateDeviceDescription(int device_ordinal) {
+  GpuDeviceHandle device;
+  TF_RETURN_IF_ERROR(GpuDriver::GetDevice(device_ordinal, &device));
+  int cc_major;
+  int cc_minor;
+  TF_RETURN_IF_ERROR(
+      GpuDriver::GetComputeCapability(&cc_major, &cc_minor, device));
+  DeviceDescription desc;
+  desc.set_driver_version(
+      ParseCudaVersion(GpuDriver::GetDriverVersion().value_or(0))
+          .value_or(SemanticVersion{0, 0, 0}));
+  desc.set_runtime_version(
+      ParseCudaVersion(CudaRuntime::GetRuntimeVersion().value_or(0))
+          .value_or(SemanticVersion{0, 0, 0}));
+  desc.set_compile_time_toolkit_version(
+      ParseCudaVersion(CUDA_VERSION).value_or(SemanticVersion{0, 0, 0}));
+  {
+    std::string pci_bus_id = GpuDriver::GetPCIBusID(device);
+    pci_bus_id = absl::AsciiStrToLower(pci_bus_id);
+    desc.set_pci_bus_id(pci_bus_id);
+    int numa_node = ReadNumaNode(pci_bus_id, device_ordinal);
+    desc.set_numa_node(numa_node);
+  }
+  {
+    desc.set_threads_per_block_limit(
+        GpuDriver::GetDeviceAttribute(CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
+                                      device)
+            .value());
+    ThreadDim thread_dim_limit;
+    thread_dim_limit.x = GpuDriver::GetDeviceAttribute(
+                             CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X, device)
+                             .value();
+    thread_dim_limit.y = GpuDriver::GetDeviceAttribute(
+                             CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y, device)
+                             .value();
+    thread_dim_limit.z = GpuDriver::GetDeviceAttribute(
+                             CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z, device)
+                             .value();
+    desc.set_thread_dim_limit(thread_dim_limit);
+  }
+  int sm_clock_khz =
+      GpuDriver::GetDeviceAttribute(CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device)
+          .value();
+  desc.set_clock_rate_ghz(static_cast<float>(sm_clock_khz) / 1e6);
+  {
+    bool ecc_enabled = false;
+    (void)GpuDriver::IsEccEnabled(device, &ecc_enabled);
+    desc.set_ecc_enabled(ecc_enabled);
+  }
+  uint64_t device_memory_size = static_cast<uint64_t>(-1);
+  (void)GpuDriver::GetDeviceTotalMemory(device, &device_memory_size);
+  desc.set_device_memory_size(device_memory_size);
+  int64_t l2_cache_bytes =
+      GpuDriver::GetDeviceAttribute(CU_DEVICE_ATTRIBUTE_L2_CACHE_SIZE, device)
+          .value();
+  desc.set_l2_cache_size(l2_cache_bytes);
+  absl::StatusOr<int> mem_clock_khz = GpuDriver::GetDeviceAttribute(
+      CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE, device_ordinal);
+  absl::StatusOr<int> mem_bus_width_bits = GpuDriver::GetDeviceAttribute(
+      CU_DEVICE_ATTRIBUTE_GLOBAL_MEMORY_BUS_WIDTH, device_ordinal);
+  if (mem_clock_khz.ok() && mem_bus_width_bits.ok()) {
+    desc.set_memory_bandwidth(2 * int64_t{mem_clock_khz.value()} * 1000 *
+                              int64_t{mem_bus_width_bits.value()} / 8);
+  }
+  {
+    BlockDim block_dim_limit;
+    TF_RETURN_IF_ERROR(FillBlockDimLimit(device, &block_dim_limit));
+    desc.set_block_dim_limit(block_dim_limit);
+  }
+  {
+    std::string device_name;
+    TF_RETURN_IF_ERROR(GpuDriver::GetDeviceName(device, &device_name));
+    desc.set_name(device_name);
+  }
+  desc.set_platform_version(
+      absl::StrCat("Compute Capability ", cc_major, ".", cc_minor));
+  desc.set_device_address_bits(64);
+  desc.set_device_vendor("NVIDIA Corporation");
+  desc.set_cuda_compute_capability(cc_major, cc_minor);
+  desc.set_shared_memory_per_core(
+      GpuDriver::GetMaxSharedMemoryPerCore(device).value());
+  desc.set_shared_memory_per_block(
+      GpuDriver::GetMaxSharedMemoryPerBlock(device).value());
+  desc.set_shared_memory_per_block_optin(
+      GpuDriver::GetMaxSharedMemoryPerBlockOptin(device).value());
+  int core_count = GpuDriver::GetMultiprocessorCount(device).value();
+  desc.set_core_count(core_count);
+  desc.set_fpus_per_core(fpus_per_core(cc_major, cc_minor));
+  desc.set_threads_per_core_limit(
+      GpuDriver::GetMaxThreadsPerMultiprocessor(device).value());
+  desc.set_registers_per_block_limit(
+      GpuDriver::GetMaxRegistersPerBlock(device).value());
+  desc.set_threads_per_warp(GpuDriver::GetThreadsPerWarp(device).value());
+  desc.set_registers_per_core_limit(
+      GpuDriver::GetDeviceAttribute(
+          CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_MULTIPROCESSOR, device)
+          .value());
+  auto value_or = [](const auto& status_or, auto default_val) {
+    if (status_or.ok()) return *status_or;
+    return default_val;
+  };
+  desc.set_model_str(absl::StrFormat(
+      "sm_%d.%d with %dB RAM, %d cores, %dKHz clock, %dKHz mem clock, %dB L2$",
+      cc_major, cc_minor, device_memory_size, core_count, sm_clock_khz,
+      value_or(mem_clock_khz, 0), l2_cache_bytes));
+  return std::make_unique<DeviceDescription>(std::move(desc));
+}
+}  
+}  

@@ -1,0 +1,71 @@
+#include "tensorflow/lite/tools/delegates/compatibility/gpu/gpu_delegate_compatibility_checker.h"
+#include <functional>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include "absl/status/status.h"
+#include "tensorflow/lite/model_builder.h"
+#include "tensorflow/lite/tools/delegates/compatibility/protos/compatibility_result.pb.h"
+#include "tensorflow/lite/tools/versioning/gpu_compatibility.h"
+#include "tensorflow/lite/tools/versioning/op_signature.h"
+namespace tflite {
+namespace tools {
+namespace {
+void convertToValidationFailureType(absl::Status status,
+                                    proto::OpCompatibilityResult* op_result) {
+  auto compatibility_failure = op_result->add_compatibility_failures();
+  compatibility_failure->set_description(std::string(status.message()));
+  switch (status.code()) {
+    case absl::StatusCode::kInvalidArgument:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_INVALID_ARGUMENT);
+      break;
+    case absl::StatusCode::kUnimplemented:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_UNIMPLEMENTED_ERROR);
+      break;
+    case absl::StatusCode::kInternal:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_INTERNAL_ERROR);
+      break;
+    case absl::StatusCode::kOutOfRange:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_OUT_OF_RANGE);
+      break;
+    default:
+      compatibility_failure->set_failure_type(
+          proto::CompatibilityFailureType::DCC_INTERNAL_ERROR);
+      compatibility_failure->set_description(
+          "Unknown validation failure type.");
+  }
+}
+}  
+std::unordered_map<std::string, std::string>
+tools::GpuDelegateCompatibilityChecker::getDccConfigurations() {
+  return {};
+}
+absl::Status tools::GpuDelegateCompatibilityChecker::setDccConfigurations(
+    const std::unordered_map<std::string, std::string>& dcc_configs) {
+  return absl::OkStatus();
+}
+absl::Status
+tools::GpuDelegateCompatibilityChecker::checkModelCompatibilityOnline(
+    tflite::FlatBufferModel* model_buffer,
+    tflite::proto::CompatibilityResult* result) {
+  return absl::UnimplementedError(
+      "Online mode is not supported on GPU delegate compatibility checker.");
+}
+absl::Status tools::GpuDelegateCompatibilityChecker::checkOpSigCompatibility(
+    const OpSignature& op_sig,
+    tflite::proto::OpCompatibilityResult* op_result) {
+  auto status = CheckGpuDelegateCompatibility(op_sig);
+  if (!status.ok()) {
+    convertToValidationFailureType(status, op_result);
+    op_result->set_is_supported(false);
+  } else {
+    op_result->set_is_supported(true);
+  }
+  return absl::OkStatus();
+}
+}  
+}  

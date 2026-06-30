@@ -1,0 +1,560 @@
+#include "tensorflow/core/kernels/data/parallel_batch_dataset_op.h"
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <utility>
+#include "tensorflow/core/common_runtime/function.h"
+#include "tensorflow/core/common_runtime/input_colocation_exemption_registry.h"
+#include "tensorflow/core/data/dataset_utils.h"
+#include "tensorflow/core/data/name_utils.h"
+#include "tensorflow/core/data/stats_utils.h"
+#include "tensorflow/core/framework/dataset.h"
+#include "tensorflow/core/framework/metrics.h"
+#include "tensorflow/core/framework/model.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/partial_tensor_shape.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/lib/gtl/cleanup.h"
+#include "tensorflow/core/platform/env_time.h"
+#include "tensorflow/core/platform/macros.h"
+#include "tensorflow/core/platform/mutex.h"
+#include "tensorflow/core/platform/status.h"
+#include "tensorflow/core/platform/stringprintf.h"
+#include "tensorflow/core/profiler/lib/traceme.h"
+#include "tensorflow/core/profiler/lib/traceme_encode.h"
+#include "tensorflow/core/util/batch_util.h"
+namespace tensorflow {
+namespace data {
+ constexpr const char* const ParallelBatchDatasetOp::kDatasetType;
+ constexpr const char* const ParallelBatchDatasetOp::kInputDataset;
+ constexpr const char* const ParallelBatchDatasetOp::kBatchSize;
+ constexpr const char* const
+    ParallelBatchDatasetOp::kNumParallelCalls;
+ constexpr const char* const ParallelBatchDatasetOp::kDropRemainder;
+ constexpr const char* const ParallelBatchDatasetOp::kParallelCopy;
+ constexpr const char* const ParallelBatchDatasetOp::kOutputTypes;
+ constexpr const char* const ParallelBatchDatasetOp::kOutputShapes;
+ constexpr const char* const ParallelBatchDatasetOp::kDeterministic;
+namespace {
+constexpr char kBatchResultsSize[] = "batch_results_size";
+constexpr char kTFDataParallelBatch[] = "tf_data_parallel_batch";
+constexpr char kBatchResults[] = "batch_results";
+constexpr char kEndOfInput[] = "end_of_input";
+constexpr char kNumElements[] = "num_elements";
+constexpr char kCallFinished[] = "call_finished";
+constexpr char kOutputAllocated[] = "output_allocated";
+constexpr char kStatus[] = "status";
+}  
+class ParallelBatchDatasetOp::Dataset : public DatasetBase {
+ public:
+  Dataset(OpKernelContext* ctx, int64_t batch_size, int64_t num_parallel_calls,
+          bool drop_remainder, bool parallel_copy, const DatasetBase* input,
+          DeterminismPolicy deterministic)
+      : DatasetBase(DatasetContext(ctx)),
+        batch_size_(batch_size),
+        reserve_size_(drop_remainder ? batch_size
+                                     : std::min<int64_t>(batch_size, 1 << 16)),
+        num_parallel_calls_(num_parallel_calls),
+        drop_remainder_(drop_remainder),
+        parallel_copy_(parallel_copy),
+        input_(input),
+        deterministic_(deterministic),
+        traceme_metadata_(
+            {{"autotune",
+              num_parallel_calls == model::kAutotune ? "true" : "false"},
+             {"batch_size",
+              strings::Printf("%lld", static_cast<long long>(batch_size))},
+             {"drop_remainder", drop_remainder ? "true" : "false"},
+             {"parallel_copy", parallel_copy ? "true" : "false"}}) {
+    input_->Ref();
+    const auto& input_shapes = input_->output_shapes();
+    output_shapes_.reserve(input_shapes.size());
+    for (const auto& input_shape : input_shapes) {
+      if (drop_remainder_ || input_->Cardinality() == kInfiniteCardinality) {
+        output_shapes_.emplace_back(
+            PartialTensorShape({batch_size_}).Concatenate(input_shape));
+      } else {
+        output_shapes_.emplace_back(
+            PartialTensorShape({-1}).Concatenate(input_shape));
+      }
+    }
+  }
+  ~Dataset() override { input_->Unref(); }
+  std::unique_ptr<IteratorBase> MakeIteratorInternal(
+      const string& prefix) const override {
+    return std::make_unique<Iterator>(Iterator::Params{
+        this, name_utils::IteratorPrefix(kDatasetType, prefix)});
+  }
+  const DataTypeVector& output_dtypes() const override {
+    return input_->output_dtypes();
+  }
+  const std::vector<PartialTensorShape>& output_shapes() const override {
+    return output_shapes_;
+  }
+  string DebugString() const override {
+    name_utils::DatasetDebugStringParams params;
+    params.set_args(batch_size_);
+    return name_utils::DatasetDebugString(kDatasetType, params);
+  }
+  int64_t CardinalityInternal(CardinalityOptions options) const override {
+    int64_t n = input_->Cardinality(options);
+    if (n == kInfiniteCardinality || n == kUnknownCardinality) {
+      return n;
+    }
+    return n / batch_size_ + (n % batch_size_ == 0 || drop_remainder_ ? 0 : 1);
+  }
+  Status InputDatasets(std::vector<const DatasetBase*>* inputs) const override {
+    inputs->push_back(input_);
+    return absl::OkStatus();
+  }
+  Status CheckExternalState() const override {
+    return input_->CheckExternalState();
+  }
+ protected:
+  Status AsGraphDefInternal(SerializationContext* ctx,
+                            DatasetGraphDefBuilder* b,
+                            Node** output) const override {
+    Node* input_graph_node = nullptr;
+    TF_RETURN_IF_ERROR(b->AddInputDataset(ctx, input_, &input_graph_node));
+    Node* batch_size = nullptr;
+    TF_RETURN_IF_ERROR(b->AddScalar(batch_size_, &batch_size));
+    Node* num_parallel_calls = nullptr;
+    TF_RETURN_IF_ERROR(b->AddScalar(num_parallel_calls_, &num_parallel_calls));
+    Node* drop_remainder = nullptr;
+    TF_RETURN_IF_ERROR(b->AddScalar(drop_remainder_, &drop_remainder));
+    std::vector<std::pair<StringPiece, AttrValue>> attrs;
+    AttrValue parallel_copy_attr;
+    b->BuildAttrValue(parallel_copy_, &parallel_copy_attr);
+    attrs.emplace_back(kParallelCopy, parallel_copy_attr);
+    AttrValue deterministic_attr;
+    b->BuildAttrValue(deterministic_.String(), &deterministic_attr);
+    attrs.emplace_back(kDeterministic, deterministic_attr);
+    TF_RETURN_IF_ERROR(b->AddDataset(
+        this,
+        {input_graph_node, batch_size, num_parallel_calls, drop_remainder},
+        attrs, output));
+    return absl::OkStatus();
+  }
+ private:
+  class Iterator : public DatasetIterator<Dataset> {
+   public:
+    explicit Iterator(const Params& params)
+        : DatasetIterator<Dataset>(params),
+          mu_(std::make_shared<mutex>()),
+          cond_var_(std::make_shared<condition_variable>()),
+          num_parallel_calls_(std::make_shared<model::SharedState>(
+              params.dataset->num_parallel_calls_, mu_, cond_var_)),
+          deterministic_(params.dataset->deterministic_.IsDeterministic() ||
+                         params.dataset->deterministic_.IsDefault()) {}
+    ~Iterator() override {
+      CancelThreads(true);
+      if (deregister_fn_) deregister_fn_();
+    }
+    bool SymbolicCheckpointCompatible() const override { return true; }
+    Status Initialize(IteratorContext* ctx) override {
+      mutex_lock l(*mu_);
+      interleave_depth_ = ctx->interleave_depth();
+      if (num_parallel_calls_->value == model::kAutotune) {
+        if (dataset()->parallel_copy_) {
+          num_parallel_calls_->value = 1;
+        } else {
+          num_parallel_calls_->value = GetAutotuneDefaultParallelism(ctx);
+        }
+      }
+      cancellation_manager_ = std::make_unique<CancellationManager>();
+      TF_RETURN_IF_ERROR(RegisterCancellationCallback(
+          ctx->cancellation_manager(),
+          [this]() { CancelThreads(false); }, &deregister_fn_));
+      IteratorContext::Params params(ctx);
+      params.cancellation_manager = cancellation_manager_.get();
+      IteratorContext iter_ctx(std::move(params));
+      TF_RETURN_IF_ERROR(dataset()->input_->MakeIterator(
+          &iter_ctx, this, prefix(), &input_impl_));
+      ctx->MergeCheckpoint(iter_ctx.checkpoint());
+      if (ctx->warm_start() && !ctx->is_restoring()) {
+        EnsureThreadsStarted(ctx);
+      }
+      return absl::OkStatus();
+    }
+    Status GetNextInternal(IteratorContext* ctx,
+                           std::vector<Tensor>* out_tensors,
+                           bool* end_of_sequence) override {
+      std::shared_ptr<BatchResult> result;
+      {
+        mutex_lock l(*mu_);
+        EnsureThreadsStarted(ctx);
+        while (ShouldWait(&result)) {
+          RecordStop(ctx);
+          cond_var_->wait(l);
+          RecordStart(ctx);
+        }
+        if (cancelled_) {
+          return errors::Cancelled("Iterator was cancelled");
+        }
+      }
+      tsl::profiler::TraceMe traceme([&] {
+        return tsl::profiler::TraceMeEncode("ParallelBatchConsume",
+                                            {{"element_id", result->uid}});
+      });
+      mutex_lock l(result->mu);
+      auto cleanup =
+          gtl::MakeCleanup([result]() TF_EXCLUSIVE_LOCKS_REQUIRED(
+                               &BatchResult::mu) { result->output.clear(); });
+      if (result->output_allocated) {
+        RecordBufferDequeue(ctx, result->output);
+      }
+      ctx->MergeCheckpoint(&result->checkpoint);
+      TF_RETURN_IF_ERROR(
+          ProcessBatch(dataset()->batch_size_, result->num_elements,
+                       dataset()->drop_remainder_, result->status, ctx,
+                       out_tensors, end_of_sequence, &result->output));
+      return absl::OkStatus();
+    }
+   protected:
+    std::shared_ptr<model::Node> CreateNode(
+        IteratorContext* ctx, model::Node::Args args) const override {
+      return model::MakeAsyncKnownRatioNode(
+          std::move(args),
+          dataset()->batch_size_, 1.0,
+          {model::MakeParameter("parallelism", num_parallel_calls_, 1,
+                                ctx->runner_threadpool_size())});
+    }
+    Status SaveInternal(SerializationContext* ctx,
+                        IteratorStateWriter* writer) override {
+      if (ctx->symbolic_checkpoint()) {
+        return writer->WriteScalar(prefix(), kBatchResultsSize, 0);
+      }
+      mutex_lock l(*mu_);
+      while (num_calls_ > 0) {
+        cond_var_->wait(l);
+      }
+      DCHECK_EQ(num_calls_, 0);
+      TF_RETURN_IF_ERROR(SaveInput(ctx, writer, input_impl_));
+      TF_RETURN_IF_ERROR(writer->WriteScalar(prefix(), kBatchResultsSize,
+                                             batch_results_.size()));
+      for (size_t i = 0; i < batch_results_.size(); ++i) {
+        TF_RETURN_IF_ERROR(WriteBatchResult(writer, i));
+      }
+      return absl::OkStatus();
+    }
+    Status RestoreInternal(IteratorContext* ctx,
+                           IteratorStateReader* reader) override {
+      mutex_lock l(*mu_);
+      DCHECK(!runner_thread_);
+      TF_RETURN_IF_ERROR(RestoreInput(ctx, reader, input_impl_));
+      int64_t batch_results_size;
+      TF_RETURN_IF_ERROR(
+          reader->ReadScalar(prefix(), kBatchResultsSize, &batch_results_size));
+      DCHECK(batch_results_.empty());
+      for (int i = 0; i < batch_results_size; ++i) {
+        TF_RETURN_IF_ERROR(ReadBatchResult(ctx, reader, i));
+      }
+      if (ctx->warm_start()) {
+        EnsureThreadsStarted(ctx);
+      }
+      return absl::OkStatus();
+    }
+    TraceMeMetadata GetTraceMeMetadata() const override {
+      int64_t parallelism = -1;
+      if (mu_->try_lock()) {
+        parallelism = num_parallel_calls_->value;
+        mu_->unlock();
+      }
+      auto result = dataset()->traceme_metadata_;
+      result.push_back(
+          std::make_pair("deterministic", deterministic_ ? "true" : "false"));
+      result.push_back(std::make_pair(
+          "parallelism",
+          parallelism == -1
+              ? kTraceInfoUnavailable
+              : strings::Printf("%lld", static_cast<long long>(parallelism))));
+      result.push_back(std::make_pair(
+          "interleave_depth",
+          strings::Printf("%lld", static_cast<long long>(interleave_depth_))));
+      return result;
+    }
+    struct BatchResult {
+      explicit BatchResult(IteratorContext* ctx)
+          : end_of_input(false),
+            num_elements(0),
+            status(absl::OkStatus()),
+            call_finished(false),
+            output_allocated(false),
+            uid(tensorflow::EnvTime::NowNanos()),
+            checkpoint(MemoryCheckpoint{ctx->id_registry()}) {}
+      mutex mu;
+      bool end_of_input TF_GUARDED_BY(mu);
+      int64_t num_elements TF_GUARDED_BY(mu);
+      std::vector<Tensor> output TF_GUARDED_BY(mu);
+      Status status TF_GUARDED_BY(mu);
+      bool call_finished TF_GUARDED_BY(&Iterator::mu_);
+      bool output_allocated TF_GUARDED_BY(mu);
+      const int64_t uid = -1;
+      MemoryCheckpoint checkpoint;
+    };
+    void CallCompleted(const std::shared_ptr<IteratorContext>& ctx,
+                       const std::shared_ptr<BatchResult>& result)
+        TF_LOCKS_EXCLUDED(*mu_) {
+      mutex_lock l(*mu_);
+      num_calls_--;
+      result->call_finished = true;
+      cond_var_->notify_all();
+    }
+    void CallBatching(std::shared_ptr<IteratorContext> ctx,
+                      const std::shared_ptr<BatchResult>& result)
+        TF_LOCKS_EXCLUDED(*mu_) {
+      tsl::profiler::TraceMe traceme([&] {
+        return tsl::profiler::TraceMeEncode("ParallelBatchProduce",
+                                            {{"element_id", result->uid}});
+      });
+      if (!input_impl_) {
+        CallCompleted(ctx, result);
+        return;
+      }
+      std::vector<std::vector<Tensor>> batch_elements;
+      batch_elements.reserve(dataset()->reserve_size_);
+      bool end_of_input = false;
+      for (int i = 0; i < dataset()->batch_size_ && !end_of_input; ++i) {
+        std::vector<Tensor> batch_element_tuple;
+        Status status = input_impl_->GetNext(ctx.get(), &batch_element_tuple,
+                                             &end_of_input);
+        {
+          mutex_lock l(result->mu);
+          result->end_of_input = result->end_of_input || end_of_input;
+          result->status.Update(status);
+          result->checkpoint.Merge(ctx->checkpoint());
+          if (result->end_of_input || !result->status.ok()) break;
+        }
+        if (!end_of_input) {
+          batch_elements.emplace_back(std::move(batch_element_tuple));
+          mutex_lock l(result->mu);
+          result->num_elements++;
+        } else {
+          input_impl_.reset();
+        }
+      }
+      if (batch_elements.empty()) {
+        CallCompleted(ctx, result);
+        return;
+      }
+      auto copy_elements_fn = [this, ctx, result,
+                               batch_elements =
+                                   std::move(batch_elements)]() mutable {
+        Status status;
+        {
+          mutex_lock l(result->mu);
+          status = CopyBatch(AnyContext(ctx.get()), std::move(batch_elements),
+                             dataset()->parallel_copy_, &result->output);
+          result->status.Update(status);
+          if (result->status.ok()) {
+            result->output_allocated = true;
+            RecordBufferEnqueue(ctx.get(), result->output);
+          } else {
+            result->output.clear();
+            result->output_allocated = false;
+          }
+        }
+        CallCompleted(ctx, result);
+        return status;
+      };
+      (*ctx->runner())(std::move(copy_elements_fn));
+    }
+    void CancelThreads(bool wait) TF_LOCKS_EXCLUDED(mu_) {
+      cancellation_manager_->StartCancel();
+      mutex_lock l(*mu_);
+      cancelled_ = true;
+      cond_var_->notify_all();
+      while (wait && num_calls_ > 0) {
+        cond_var_->wait(l);
+      }
+    }
+    void EnsureThreadsStarted(IteratorContext* ctx)
+        TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
+      if (!runner_thread_) {
+        auto new_ctx = std::make_shared<IteratorContext>(*ctx);
+        runner_thread_ =
+            ctx->StartThread(kTFDataParallelBatch,
+                             std::bind(&Iterator::RunnerThread, this, new_ctx));
+      }
+    }
+    void RunnerThread(const std::shared_ptr<IteratorContext>& ctx)
+        TF_LOCKS_EXCLUDED(*mu_) {
+      std::vector<std::shared_ptr<BatchResult>> new_calls;
+      RecordStart(ctx.get());
+      auto stop_cleanup =
+          gtl::MakeCleanup([this, &ctx]() { RecordStop(ctx.get()); });
+      {
+        tf_shared_lock l(*mu_);  
+        new_calls.reserve(num_parallel_calls_->value);
+      }
+      auto busy = [this]() TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) -> bool {
+        int64_t num_parallel_calls = num_parallel_calls_->value;
+        return num_calls_ >= num_parallel_calls ||
+               batch_results_.size() >= num_parallel_calls;
+      };
+      while (true) {
+        {
+          mutex_lock l(*mu_);
+          while (!cancelled_ && busy()) {
+            RecordStop(ctx.get());
+            cond_var_->wait(l);
+            RecordStart(ctx.get());
+          }
+          if (cancelled_) {
+            return;
+          }
+          while (!busy()) {
+            batch_results_.push_back(std::make_shared<BatchResult>(ctx.get()));
+            new_calls.emplace_back(batch_results_.back());
+            num_calls_++;
+          }
+        }
+        for (const auto& call : new_calls) {
+          CallBatching(ctx, call);
+        }
+        new_calls.clear();
+      }
+    }
+    bool ShouldWait(std::shared_ptr<BatchResult>* result)
+        TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
+      if (cancelled_) {
+        return false;
+      }
+      if (!deterministic_) {
+        bool find_batch;
+        for (auto it = batch_results_.begin(); it != batch_results_.end();
+             ++it) {
+          if (!(*it)->call_finished) continue;
+          find_batch = (it == batch_results_.begin());
+          if (!find_batch) {
+            tf_shared_lock l((*it)->mu);
+            find_batch = !(*it)->end_of_input;
+          }
+          if (find_batch) {
+            std::swap(*result, *it);
+            batch_results_.erase(it);
+            cond_var_->notify_all();
+            return false;
+          }
+        }
+      } else if (!batch_results_.empty() &&
+                 batch_results_.front()->call_finished) {
+        std::swap(*result, batch_results_.front());
+        batch_results_.pop_front();
+        cond_var_->notify_all();
+        return false;
+      }
+      return true;
+    }
+    Status ReadBatchResult(IteratorContext* ctx, IteratorStateReader* reader,
+                           size_t index) TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
+      batch_results_.push_back(std::make_shared<BatchResult>(ctx));
+      std::shared_ptr<BatchResult> result = batch_results_.back();
+      string batch_prefix = strings::StrCat(kBatchResults, "_", index);
+      mutex_lock l(result->mu);
+      result->end_of_input = reader->Contains(
+          prefix(), strings::StrCat(batch_prefix, "_", kEndOfInput));
+      TF_RETURN_IF_ERROR(reader->ReadScalar(
+          prefix(), strings::StrCat(batch_prefix, "_", kNumElements),
+          &result->num_elements));
+      result->call_finished = reader->Contains(
+          prefix(), strings::StrCat(batch_prefix, "_", kCallFinished));
+      result->output_allocated = reader->Contains(
+          prefix(), strings::StrCat(batch_prefix, "_", kOutputAllocated));
+      TF_RETURN_IF_ERROR(ReadBatch(ctx, reader, dataset()->batch_size_,
+                                   prefix(), batch_prefix, &result->output));
+      TF_RETURN_IF_ERROR(ReadStatus(prefix(),
+                                    strings::StrCat(batch_prefix, "_", kStatus),
+                                    reader, &result->status));
+      if (result->output_allocated) {
+        RecordBufferEnqueue(ctx, result->output);
+      }
+      return absl::OkStatus();
+    }
+    Status WriteBatchResult(IteratorStateWriter* writer, size_t index)
+        TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
+      std::shared_ptr<BatchResult> result = batch_results_[index];
+      string batch_prefix = strings::StrCat(kBatchResults, "_", index);
+      mutex_lock l(result->mu);
+      if (result->end_of_input) {
+        TF_RETURN_IF_ERROR(writer->WriteScalar(
+            prefix(), strings::StrCat(batch_prefix, "_", kEndOfInput), ""));
+      }
+      TF_RETURN_IF_ERROR(writer->WriteScalar(
+          prefix(), strings::StrCat(batch_prefix, "_", kNumElements),
+          result->num_elements));
+      if (result->call_finished) {
+        TF_RETURN_IF_ERROR(writer->WriteScalar(
+            prefix(), strings::StrCat(batch_prefix, "_", kCallFinished), ""));
+      }
+      if (result->output_allocated) {
+        TF_RETURN_IF_ERROR(writer->WriteScalar(
+            prefix(), strings::StrCat(batch_prefix, "_", kOutputAllocated),
+            ""));
+      }
+      TF_RETURN_IF_ERROR(WriteBatch(dataset()->batch_size_,
+                                    result->num_elements, prefix(),
+                                    batch_prefix, writer, &result->output));
+      TF_RETURN_IF_ERROR(
+          WriteStatus(prefix(), strings::StrCat(batch_prefix, "_", kStatus),
+                      result->status, writer));
+      return absl::OkStatus();
+    }
+    const std::shared_ptr<mutex> mu_;
+    const std::shared_ptr<condition_variable> cond_var_;
+    const std::shared_ptr<model::SharedState> num_parallel_calls_;
+    const bool deterministic_;
+    std::unique_ptr<CancellationManager> cancellation_manager_;
+    int64_t num_calls_ TF_GUARDED_BY(*mu_) = 0;
+    std::unique_ptr<IteratorBase> input_impl_;
+    std::deque<std::shared_ptr<BatchResult>> batch_results_ TF_GUARDED_BY(*mu_);
+    bool cancelled_ TF_GUARDED_BY(*mu_) = false;
+    std::function<void()> deregister_fn_;
+    int64 interleave_depth_ = -1;
+    std::unique_ptr<Thread> runner_thread_ TF_GUARDED_BY(*mu_);
+  };
+  const int64_t batch_size_;
+  const int64_t reserve_size_;
+  const int64_t num_parallel_calls_;
+  const bool drop_remainder_;
+  const bool parallel_copy_;
+  const DatasetBase* const input_;
+  std::vector<PartialTensorShape> output_shapes_;
+  const DeterminismPolicy deterministic_;
+  const TraceMeMetadata traceme_metadata_;
+};
+ParallelBatchDatasetOp::ParallelBatchDatasetOp(OpKernelConstruction* ctx)
+    : UnaryDatasetOpKernel(ctx) {
+  if (ctx->HasAttr(kDeterministic)) {
+    std::string deterministic;
+    OP_REQUIRES_OK(ctx, ctx->GetAttr(kDeterministic, &deterministic));
+    OP_REQUIRES_OK(
+        ctx, DeterminismPolicy::FromString(deterministic, &deterministic_));
+  }
+  if (ctx->HasAttr(kParallelCopy)) {
+    OP_REQUIRES_OK(ctx, ctx->GetAttr(kParallelCopy, &parallel_copy_));
+  }
+}
+void ParallelBatchDatasetOp::MakeDataset(OpKernelContext* ctx,
+                                         DatasetBase* input,
+                                         DatasetBase** output) {
+  int64_t batch_size = 0;
+  OP_REQUIRES_OK(ctx,
+                 ParseScalarArgument<int64_t>(ctx, kBatchSize, &batch_size));
+  OP_REQUIRES(ctx, batch_size > 0,
+              errors::InvalidArgument("Batch size must be greater than zero."));
+  int64_t num_parallel_calls = 0;
+  OP_REQUIRES_OK(ctx, ParseScalarArgument<int64_t>(ctx, kNumParallelCalls,
+                                                   &num_parallel_calls));
+  bool drop_remainder = false;
+  OP_REQUIRES_OK(
+      ctx, ParseScalarArgument<bool>(ctx, kDropRemainder, &drop_remainder));
+  *output = new Dataset(ctx, batch_size, num_parallel_calls, drop_remainder,
+                        parallel_copy_, input, deterministic_);
+}
+namespace {
+REGISTER_KERNEL_BUILDER(Name("ParallelBatchDataset").Device(DEVICE_CPU),
+                        ParallelBatchDatasetOp);
+}  
+}  
+}  

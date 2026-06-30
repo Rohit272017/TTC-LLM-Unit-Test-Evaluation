@@ -1,0 +1,346 @@
+#include "absl/container/internal/raw_hash_set.h"
+#include <atomic>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include "absl/base/attributes.h"
+#include "absl/base/config.h"
+#include "absl/base/dynamic_annotations.h"
+#include "absl/base/internal/endian.h"
+#include "absl/base/optimization.h"
+#include "absl/container/internal/container_memory.h"
+#include "absl/container/internal/hashtablez_sampler.h"
+#include "absl/hash/hash.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace container_internal {
+constexpr ctrl_t ZeroCtrlT() { return static_cast<ctrl_t>(0); }
+alignas(16) ABSL_CONST_INIT ABSL_DLL const ctrl_t kEmptyGroup[32] = {
+    ZeroCtrlT(),       ZeroCtrlT(),    ZeroCtrlT(),    ZeroCtrlT(),
+    ZeroCtrlT(),       ZeroCtrlT(),    ZeroCtrlT(),    ZeroCtrlT(),
+    ZeroCtrlT(),       ZeroCtrlT(),    ZeroCtrlT(),    ZeroCtrlT(),
+    ZeroCtrlT(),       ZeroCtrlT(),    ZeroCtrlT(),    ZeroCtrlT(),
+    ctrl_t::kSentinel, ctrl_t::kEmpty, ctrl_t::kEmpty, ctrl_t::kEmpty,
+    ctrl_t::kEmpty,    ctrl_t::kEmpty, ctrl_t::kEmpty, ctrl_t::kEmpty,
+    ctrl_t::kEmpty,    ctrl_t::kEmpty, ctrl_t::kEmpty, ctrl_t::kEmpty,
+    ctrl_t::kEmpty,    ctrl_t::kEmpty, ctrl_t::kEmpty, ctrl_t::kEmpty};
+ABSL_CONST_INIT ABSL_DLL const ctrl_t kSooControl[17] = {
+    ZeroCtrlT(),    ctrl_t::kSentinel, ZeroCtrlT(),    ctrl_t::kEmpty,
+    ctrl_t::kEmpty, ctrl_t::kEmpty,    ctrl_t::kEmpty, ctrl_t::kEmpty,
+    ctrl_t::kEmpty, ctrl_t::kEmpty,    ctrl_t::kEmpty, ctrl_t::kEmpty,
+    ctrl_t::kEmpty, ctrl_t::kEmpty,    ctrl_t::kEmpty, ctrl_t::kEmpty,
+    ctrl_t::kEmpty};
+static_assert(NumControlBytes(SooCapacity()) <= 17,
+              "kSooControl capacity too small");
+#ifdef ABSL_INTERNAL_NEED_REDUNDANT_CONSTEXPR_DECL
+constexpr size_t Group::kWidth;
+#endif
+namespace {
+inline size_t RandomSeed() {
+#ifdef ABSL_HAVE_THREAD_LOCAL
+  static thread_local size_t counter = 0;
+  ABSL_ANNOTATE_MEMORY_IS_INITIALIZED(&counter, sizeof(size_t));
+  size_t value = ++counter;
+#else   
+  static std::atomic<size_t> counter(0);
+  size_t value = counter.fetch_add(1, std::memory_order_relaxed);
+#endif  
+  return value ^ static_cast<size_t>(reinterpret_cast<uintptr_t>(&counter));
+}
+bool ShouldRehashForBugDetection(const ctrl_t* ctrl, size_t capacity) {
+  return probe(ctrl, capacity, absl::HashOf(RandomSeed())).offset() <
+         RehashProbabilityConstant();
+}
+}  
+GenerationType* EmptyGeneration() {
+  if (SwisstableGenerationsEnabled()) {
+    constexpr size_t kNumEmptyGenerations = 1024;
+    static constexpr GenerationType kEmptyGenerations[kNumEmptyGenerations]{};
+    return const_cast<GenerationType*>(
+        &kEmptyGenerations[RandomSeed() % kNumEmptyGenerations]);
+  }
+  return nullptr;
+}
+bool CommonFieldsGenerationInfoEnabled::
+    should_rehash_for_bug_detection_on_insert(const ctrl_t* ctrl,
+                                              size_t capacity) const {
+  if (reserved_growth_ == kReservedGrowthJustRanOut) return true;
+  if (reserved_growth_ > 0) return false;
+  return ShouldRehashForBugDetection(ctrl, capacity);
+}
+bool CommonFieldsGenerationInfoEnabled::should_rehash_for_bug_detection_on_move(
+    const ctrl_t* ctrl, size_t capacity) const {
+  return ShouldRehashForBugDetection(ctrl, capacity);
+}
+bool ShouldInsertBackwardsForDebug(size_t capacity, size_t hash,
+                                   const ctrl_t* ctrl) {
+  return !is_small(capacity) && (H1(hash, ctrl) ^ RandomSeed()) % 13 > 6;
+}
+size_t PrepareInsertAfterSoo(size_t hash, size_t slot_size,
+                             CommonFields& common) {
+  assert(common.capacity() == NextCapacity(SooCapacity()));
+  assert(HashSetResizeHelper::SooSlotIndex() == 1);
+  PrepareInsertCommon(common);
+  const size_t offset = H1(hash, common.control()) & 2;
+  common.growth_info().OverwriteEmptyAsFull();
+  SetCtrlInSingleGroupTable(common, offset, H2(hash), slot_size);
+  common.infoz().RecordInsert(hash, 0);
+  return offset;
+}
+void ConvertDeletedToEmptyAndFullToDeleted(ctrl_t* ctrl, size_t capacity) {
+  assert(ctrl[capacity] == ctrl_t::kSentinel);
+  assert(IsValidCapacity(capacity));
+  for (ctrl_t* pos = ctrl; pos < ctrl + capacity; pos += Group::kWidth) {
+    Group{pos}.ConvertSpecialToEmptyAndFullToDeleted(pos);
+  }
+  std::memcpy(ctrl + capacity + 1, ctrl, NumClonedBytes());
+  ctrl[capacity] = ctrl_t::kSentinel;
+}
+template FindInfo find_first_non_full(const CommonFields&, size_t);
+FindInfo find_first_non_full_outofline(const CommonFields& common,
+                                       size_t hash) {
+  return find_first_non_full(common, hash);
+}
+namespace {
+static inline void* NextSlot(void* slot, size_t slot_size) {
+  return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(slot) + slot_size);
+}
+static inline void* PrevSlot(void* slot, size_t slot_size) {
+  return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(slot) - slot_size);
+}
+size_t FindEmptySlot(size_t start, size_t end, const ctrl_t* ctrl) {
+  for (size_t i = start; i < end; ++i) {
+    if (IsEmpty(ctrl[i])) {
+      return i;
+    }
+  }
+  assert(false && "no empty slot");
+  return ~size_t{};
+}
+void DropDeletesWithoutResize(CommonFields& common,
+                              const PolicyFunctions& policy) {
+  void* set = &common;
+  void* slot_array = common.slot_array();
+  const size_t capacity = common.capacity();
+  assert(IsValidCapacity(capacity));
+  assert(!is_small(capacity));
+  ctrl_t* ctrl = common.control();
+  ConvertDeletedToEmptyAndFullToDeleted(ctrl, capacity);
+  const void* hash_fn = policy.hash_fn(common);
+  auto hasher = policy.hash_slot;
+  auto transfer = policy.transfer;
+  const size_t slot_size = policy.slot_size;
+  size_t total_probe_length = 0;
+  void* slot_ptr = SlotAddress(slot_array, 0, slot_size);
+  constexpr size_t kUnknownId = ~size_t{};
+  size_t tmp_space_id = kUnknownId;
+  for (size_t i = 0; i != capacity;
+       ++i, slot_ptr = NextSlot(slot_ptr, slot_size)) {
+    assert(slot_ptr == SlotAddress(slot_array, i, slot_size));
+    if (IsEmpty(ctrl[i])) {
+      tmp_space_id = i;
+      continue;
+    }
+    if (!IsDeleted(ctrl[i])) continue;
+    const size_t hash = (*hasher)(hash_fn, slot_ptr);
+    const FindInfo target = find_first_non_full(common, hash);
+    const size_t new_i = target.offset;
+    total_probe_length += target.probe_length;
+    const size_t probe_offset = probe(common, hash).offset();
+    const auto probe_index = [probe_offset, capacity](size_t pos) {
+      return ((pos - probe_offset) & capacity) / Group::kWidth;
+    };
+    if (ABSL_PREDICT_TRUE(probe_index(new_i) == probe_index(i))) {
+      SetCtrl(common, i, H2(hash), slot_size);
+      continue;
+    }
+    void* new_slot_ptr = SlotAddress(slot_array, new_i, slot_size);
+    if (IsEmpty(ctrl[new_i])) {
+      SetCtrl(common, new_i, H2(hash), slot_size);
+      (*transfer)(set, new_slot_ptr, slot_ptr);
+      SetCtrl(common, i, ctrl_t::kEmpty, slot_size);
+      tmp_space_id = i;
+    } else {
+      assert(IsDeleted(ctrl[new_i]));
+      SetCtrl(common, new_i, H2(hash), slot_size);
+      if (tmp_space_id == kUnknownId) {
+        tmp_space_id = FindEmptySlot(i + 1, capacity, ctrl);
+      }
+      void* tmp_space = SlotAddress(slot_array, tmp_space_id, slot_size);
+      SanitizerUnpoisonMemoryRegion(tmp_space, slot_size);
+      (*transfer)(set, tmp_space, new_slot_ptr);
+      (*transfer)(set, new_slot_ptr, slot_ptr);
+      (*transfer)(set, slot_ptr, tmp_space);
+      SanitizerPoisonMemoryRegion(tmp_space, slot_size);
+      --i;
+      slot_ptr = PrevSlot(slot_ptr, slot_size);
+    }
+  }
+  ResetGrowthLeft(common);
+  common.infoz().RecordRehash(total_probe_length);
+}
+static bool WasNeverFull(CommonFields& c, size_t index) {
+  if (is_single_group(c.capacity())) {
+    return true;
+  }
+  const size_t index_before = (index - Group::kWidth) & c.capacity();
+  const auto empty_after = Group(c.control() + index).MaskEmpty();
+  const auto empty_before = Group(c.control() + index_before).MaskEmpty();
+  return empty_before && empty_after &&
+         static_cast<size_t>(empty_after.TrailingZeros()) +
+                 empty_before.LeadingZeros() <
+             Group::kWidth;
+}
+}  
+void EraseMetaOnly(CommonFields& c, size_t index, size_t slot_size) {
+  assert(IsFull(c.control()[index]) && "erasing a dangling iterator");
+  c.decrement_size();
+  c.infoz().RecordErase();
+  if (WasNeverFull(c, index)) {
+    SetCtrl(c, index, ctrl_t::kEmpty, slot_size);
+    c.growth_info().OverwriteFullAsEmpty();
+    return;
+  }
+  c.growth_info().OverwriteFullAsDeleted();
+  SetCtrl(c, index, ctrl_t::kDeleted, slot_size);
+}
+void ClearBackingArray(CommonFields& c, const PolicyFunctions& policy,
+                       bool reuse, bool soo_enabled) {
+  c.set_size(0);
+  if (reuse) {
+    assert(!soo_enabled || c.capacity() > SooCapacity());
+    ResetCtrl(c, policy.slot_size);
+    ResetGrowthLeft(c);
+    c.infoz().RecordStorageChanged(0, c.capacity());
+  } else {
+    c.infoz().RecordClearedReservation();
+    c.infoz().RecordStorageChanged(0, soo_enabled ? SooCapacity() : 0);
+    (*policy.dealloc)(c, policy);
+    c = soo_enabled ? CommonFields{soo_tag_t{}} : CommonFields{non_soo_tag_t{}};
+  }
+}
+void HashSetResizeHelper::GrowIntoSingleGroupShuffleControlBytes(
+    ctrl_t* __restrict new_ctrl, size_t new_capacity) const {
+  assert(is_single_group(new_capacity));
+  constexpr size_t kHalfWidth = Group::kWidth / 2;
+  constexpr size_t kQuarterWidth = Group::kWidth / 4;
+  assert(old_capacity_ < kHalfWidth);
+  static_assert(sizeof(uint64_t) >= kHalfWidth,
+                "Group size is too large. The ctrl bytes for half a group must "
+                "fit into a uint64_t for this implementation.");
+  static_assert(sizeof(uint64_t) <= Group::kWidth,
+                "Group size is too small. The ctrl bytes for a group must "
+                "cover a uint64_t for this implementation.");
+  const size_t half_old_capacity = old_capacity_ / 2;
+  uint64_t copied_bytes = 0;
+  copied_bytes =
+      absl::little_endian::Load64(old_ctrl() + half_old_capacity + 1);
+  constexpr uint64_t kEmptyXorSentinel =
+      static_cast<uint8_t>(ctrl_t::kEmpty) ^
+      static_cast<uint8_t>(ctrl_t::kSentinel);
+  const uint64_t mask_convert_old_sentinel_to_empty =
+      kEmptyXorSentinel << (half_old_capacity * 8);
+  copied_bytes ^= mask_convert_old_sentinel_to_empty;
+  absl::little_endian::Store64(new_ctrl, copied_bytes);
+  std::memset(new_ctrl + old_capacity_ + 1, static_cast<int8_t>(ctrl_t::kEmpty),
+              Group::kWidth);
+  std::memset(new_ctrl + NumControlBytes(new_capacity) - kHalfWidth,
+              static_cast<int8_t>(ctrl_t::kEmpty), kHalfWidth);
+  absl::little_endian::Store64(new_ctrl + new_capacity + 1, copied_bytes);
+  std::memset(new_ctrl + new_capacity + old_capacity_ + 2,
+              static_cast<int8_t>(ctrl_t::kEmpty), kQuarterWidth);
+  new_ctrl[new_capacity] = ctrl_t::kSentinel;
+}
+void HashSetResizeHelper::InitControlBytesAfterSoo(ctrl_t* new_ctrl, ctrl_t h2,
+                                                   size_t new_capacity) {
+  assert(is_single_group(new_capacity));
+  std::memset(new_ctrl, static_cast<int8_t>(ctrl_t::kEmpty),
+              NumControlBytes(new_capacity));
+  assert(HashSetResizeHelper::SooSlotIndex() == 1);
+  assert(had_soo_slot_ || h2 == ctrl_t::kEmpty);
+  new_ctrl[1] = new_ctrl[new_capacity + 2] = h2;
+  new_ctrl[new_capacity] = ctrl_t::kSentinel;
+}
+void HashSetResizeHelper::GrowIntoSingleGroupShuffleTransferableSlots(
+    void* new_slots, size_t slot_size) const {
+  assert(old_capacity_ > 0);
+  const size_t half_old_capacity = old_capacity_ / 2;
+  SanitizerUnpoisonMemoryRegion(old_slots(), slot_size * old_capacity_);
+  std::memcpy(new_slots,
+              SlotAddress(old_slots(), half_old_capacity + 1, slot_size),
+              slot_size * half_old_capacity);
+  std::memcpy(SlotAddress(new_slots, half_old_capacity + 1, slot_size),
+              old_slots(), slot_size * (half_old_capacity + 1));
+}
+void HashSetResizeHelper::GrowSizeIntoSingleGroupTransferable(
+    CommonFields& c, size_t slot_size) {
+  assert(old_capacity_ < Group::kWidth / 2);
+  assert(is_single_group(c.capacity()));
+  assert(IsGrowingIntoSingleGroupApplicable(old_capacity_, c.capacity()));
+  GrowIntoSingleGroupShuffleControlBytes(c.control(), c.capacity());
+  GrowIntoSingleGroupShuffleTransferableSlots(c.slot_array(), slot_size);
+  PoisonSingleGroupEmptySlots(c, slot_size);
+}
+void HashSetResizeHelper::TransferSlotAfterSoo(CommonFields& c,
+                                               size_t slot_size) {
+  assert(was_soo_);
+  assert(had_soo_slot_);
+  assert(is_single_group(c.capacity()));
+  std::memcpy(SlotAddress(c.slot_array(), SooSlotIndex(), slot_size),
+              old_soo_data(), slot_size);
+  PoisonSingleGroupEmptySlots(c, slot_size);
+}
+namespace {
+ABSL_ATTRIBUTE_NOINLINE
+FindInfo FindInsertPositionWithGrowthOrRehash(CommonFields& common, size_t hash,
+                                              const PolicyFunctions& policy) {
+  const size_t cap = common.capacity();
+  if (cap > Group::kWidth &&
+      common.size() * uint64_t{32} <= cap * uint64_t{25}) {
+    DropDeletesWithoutResize(common, policy);
+  } else {
+    policy.resize(common, NextCapacity(cap), HashtablezInfoHandle{});
+  }
+  return find_first_non_full(common, hash);
+}
+}  
+const void* GetHashRefForEmptyHasher(const CommonFields& common) {
+  return &common;
+}
+size_t PrepareInsertNonSoo(CommonFields& common, size_t hash, FindInfo target,
+                           const PolicyFunctions& policy) {
+  const bool use_target_hint =
+      !SwisstableGenerationsEnabled() &&
+      common.growth_info().HasNoDeletedAndGrowthLeft();
+  if (ABSL_PREDICT_FALSE(!use_target_hint)) {
+    if (ABSL_PREDICT_TRUE(common.growth_info().HasNoGrowthLeftAndNoDeleted())) {
+      const size_t old_capacity = common.capacity();
+      policy.resize(common, NextCapacity(old_capacity), HashtablezInfoHandle{});
+      target = HashSetResizeHelper::FindFirstNonFullAfterResize(
+          common, old_capacity, hash);
+    } else {
+      const bool rehash_for_bug_detection =
+          common.should_rehash_for_bug_detection_on_insert();
+      if (rehash_for_bug_detection) {
+        const size_t cap = common.capacity();
+        policy.resize(common,
+                      common.growth_left() > 0 ? cap : NextCapacity(cap),
+                      HashtablezInfoHandle{});
+      }
+      if (ABSL_PREDICT_TRUE(common.growth_left() > 0)) {
+        target = find_first_non_full(common, hash);
+      } else {
+        target = FindInsertPositionWithGrowthOrRehash(common, hash, policy);
+      }
+    }
+  }
+  PrepareInsertCommon(common);
+  common.growth_info().OverwriteControlAsFull(common.control()[target.offset]);
+  SetCtrl(common, target.offset, H2(hash), policy.slot_size);
+  common.infoz().RecordInsert(hash, target.probe_length);
+  return target.offset;
+}
+}  
+ABSL_NAMESPACE_END
+}  

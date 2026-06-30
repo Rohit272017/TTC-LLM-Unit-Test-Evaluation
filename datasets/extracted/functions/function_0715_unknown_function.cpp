@@ -1,0 +1,19 @@
+#ifndef ABSL_STRINGS_HAS_OSTREAM_OPERATOR_H_
+#define ABSL_STRINGS_HAS_OSTREAM_OPERATOR_H_
+#include <ostream>
+#include <type_traits>
+#include <utility>
+#include "absl/base/config.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+template <typename T, typename = void>
+struct HasOstreamOperator : std::false_type {};
+template <typename T>
+struct HasOstreamOperator<
+    T, std::enable_if_t<std::is_same<
+           std::ostream&, decltype(std::declval<std::ostream&>()
+                                   << std::declval<const T&>())>::value>>
+    : std::true_type {};
+ABSL_NAMESPACE_END
+}  
+#endif  

@@ -1,0 +1,18 @@
+#ifndef ABSL_ALGORITHM_ALGORITHM_H_
+#define ABSL_ALGORITHM_ALGORITHM_H_
+#include <algorithm>
+#include <iterator>
+#include <type_traits>
+#include "absl/base/config.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+using std::equal;
+using std::rotate;
+template <typename InputIterator, typename EqualityComparable>
+ABSL_INTERNAL_CONSTEXPR_SINCE_CXX20 bool linear_search(
+    InputIterator first, InputIterator last, const EqualityComparable& value) {
+  return std::find(first, last, value) != last;
+}
+ABSL_NAMESPACE_END
+}  
+#endif  

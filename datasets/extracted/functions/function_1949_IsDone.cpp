@@ -1,0 +1,39 @@
+#include "absl/synchronization/blocking_counter.h"
+#include <atomic>
+#include "absl/base/internal/raw_logging.h"
+#include "absl/base/internal/tracing.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace {
+bool IsDone(void *arg) { return *reinterpret_cast<bool *>(arg); }
+}  
+BlockingCounter::BlockingCounter(int initial_count)
+    : count_(initial_count),
+      num_waiting_(0),
+      done_{initial_count == 0 ? true : false} {
+  ABSL_RAW_CHECK(initial_count >= 0, "BlockingCounter initial_count negative");
+}
+bool BlockingCounter::DecrementCount() {
+  int count = count_.fetch_sub(1, std::memory_order_acq_rel) - 1;
+  ABSL_RAW_CHECK(count >= 0,
+                 "BlockingCounter::DecrementCount() called too many times");
+  if (count == 0) {
+    base_internal::TraceSignal(this, TraceObjectKind());
+    MutexLock l(&lock_);
+    done_ = true;
+    return true;
+  }
+  return false;
+}
+void BlockingCounter::Wait() {
+  base_internal::TraceWait(this, TraceObjectKind());
+  {
+    MutexLock l(&this->lock_);
+    ABSL_RAW_CHECK(num_waiting_ == 0, "multiple threads called Wait()");
+    num_waiting_++;
+    this->lock_.Await(Condition(IsDone, &this->done_));
+  }
+  base_internal::TraceContinue(this, TraceObjectKind());
+}
+ABSL_NAMESPACE_END
+}  

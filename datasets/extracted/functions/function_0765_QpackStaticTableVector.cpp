@@ -1,0 +1,127 @@
+#include "quiche/quic/core/qpack/qpack_static_table.h"
+#include <vector>
+#include "absl/base/macros.h"
+#include "quiche/quic/platform/api/quic_logging.h"
+namespace quic {
+#define STATIC_ENTRY(name, value) \
+  { name, ABSL_ARRAYSIZE(name) - 1, value, ABSL_ARRAYSIZE(value) - 1 }
+const std::vector<QpackStaticEntry>& QpackStaticTableVector() {
+  static const auto* kQpackStaticTable = new std::vector<QpackStaticEntry>{
+      STATIC_ENTRY(":authority", ""),                                     
+      STATIC_ENTRY(":path", "/"),                                         
+      STATIC_ENTRY("age", "0"),                                           
+      STATIC_ENTRY("content-disposition", ""),                            
+      STATIC_ENTRY("content-length", "0"),                                
+      STATIC_ENTRY("cookie", ""),                                         
+      STATIC_ENTRY("date", ""),                                           
+      STATIC_ENTRY("etag", ""),                                           
+      STATIC_ENTRY("if-modified-since", ""),                              
+      STATIC_ENTRY("if-none-match", ""),                                  
+      STATIC_ENTRY("last-modified", ""),                                  
+      STATIC_ENTRY("link", ""),                                           
+      STATIC_ENTRY("location", ""),                                       
+      STATIC_ENTRY("referer", ""),                                        
+      STATIC_ENTRY("set-cookie", ""),                                     
+      STATIC_ENTRY(":method", "CONNECT"),                                 
+      STATIC_ENTRY(":method", "DELETE"),                                  
+      STATIC_ENTRY(":method", "GET"),                                     
+      STATIC_ENTRY(":method", "HEAD"),                                    
+      STATIC_ENTRY(":method", "OPTIONS"),                                 
+      STATIC_ENTRY(":method", "POST"),                                    
+      STATIC_ENTRY(":method", "PUT"),                                     
+      STATIC_ENTRY(":scheme", "http"),                                    
+      STATIC_ENTRY(":scheme", "https"),                                   
+      STATIC_ENTRY(":status", "103"),                                     
+      STATIC_ENTRY(":status", "200"),                                     
+      STATIC_ENTRY(":status", "304"),                                     
+      STATIC_ENTRY(":status", "404"),                                     
+      STATIC_ENTRY(":status", "503"),                                     
+      STATIC_ENTRY("accept", "*/*"),                                      
+      STATIC_ENTRY("accept", "application/dns-message"),                  
+      STATIC_ENTRY("accept-encoding", "gzip, deflate, br"),               
+      STATIC_ENTRY("accept-ranges", "bytes"),                             
+      STATIC_ENTRY("access-control-allow-headers", "cache-control"),      
+      STATIC_ENTRY("access-control-allow-headers", "content-type"),       
+      STATIC_ENTRY("access-control-allow-origin", "*"),                   
+      STATIC_ENTRY("cache-control", "max-age=0"),                         
+      STATIC_ENTRY("cache-control", "max-age=2592000"),                   
+      STATIC_ENTRY("cache-control", "max-age=604800"),                    
+      STATIC_ENTRY("cache-control", "no-cache"),                          
+      STATIC_ENTRY("cache-control", "no-store"),                          
+      STATIC_ENTRY("cache-control", "public, max-age=31536000"),          
+      STATIC_ENTRY("content-encoding", "br"),                             
+      STATIC_ENTRY("content-encoding", "gzip"),                           
+      STATIC_ENTRY("content-type", "application/dns-message"),            
+      STATIC_ENTRY("content-type", "application/javascript"),             
+      STATIC_ENTRY("content-type", "application/json"),                   
+      STATIC_ENTRY("content-type", "application/x-www-form-urlencoded"),  
+      STATIC_ENTRY("content-type", "image/gif"),                          
+      STATIC_ENTRY("content-type", "image/jpeg"),                         
+      STATIC_ENTRY("content-type", "image/png"),                          
+      STATIC_ENTRY("content-type", "text/css"),                           
+      STATIC_ENTRY("content-type", "text/html; charset=utf-8"),           
+      STATIC_ENTRY("content-type", "text/plain"),                         
+      STATIC_ENTRY("content-type", "text/plain;charset=utf-8"),           
+      STATIC_ENTRY("range", "bytes=0-"),                                  
+      STATIC_ENTRY("strict-transport-security", "max-age=31536000"),      
+      STATIC_ENTRY("strict-transport-security",
+                   "max-age=31536000; includesubdomains"),  
+      STATIC_ENTRY("strict-transport-security",
+                   "max-age=31536000; includesubdomains; preload"),        
+      STATIC_ENTRY("vary", "accept-encoding"),                             
+      STATIC_ENTRY("vary", "origin"),                                      
+      STATIC_ENTRY("x-content-type-options", "nosniff"),                   
+      STATIC_ENTRY("x-xss-protection", "1; mode=block"),                   
+      STATIC_ENTRY(":status", "100"),                                      
+      STATIC_ENTRY(":status", "204"),                                      
+      STATIC_ENTRY(":status", "206"),                                      
+      STATIC_ENTRY(":status", "302"),                                      
+      STATIC_ENTRY(":status", "400"),                                      
+      STATIC_ENTRY(":status", "403"),                                      
+      STATIC_ENTRY(":status", "421"),                                      
+      STATIC_ENTRY(":status", "425"),                                      
+      STATIC_ENTRY(":status", "500"),                                      
+      STATIC_ENTRY("accept-language", ""),                                 
+      STATIC_ENTRY("access-control-allow-credentials", "FALSE"),           
+      STATIC_ENTRY("access-control-allow-credentials", "TRUE"),            
+      STATIC_ENTRY("access-control-allow-headers", "*"),                   
+      STATIC_ENTRY("access-control-allow-methods", "get"),                 
+      STATIC_ENTRY("access-control-allow-methods", "get, post, options"),  
+      STATIC_ENTRY("access-control-allow-methods", "options"),             
+      STATIC_ENTRY("access-control-expose-headers", "content-length"),     
+      STATIC_ENTRY("access-control-request-headers", "content-type"),      
+      STATIC_ENTRY("access-control-request-method", "get"),                
+      STATIC_ENTRY("access-control-request-method", "post"),               
+      STATIC_ENTRY("alt-svc", "clear"),                                    
+      STATIC_ENTRY("authorization", ""),                                   
+      STATIC_ENTRY(
+          "content-security-policy",
+          "script-src 'none'; object-src 'none'; base-uri 'none'"),  
+      STATIC_ENTRY("early-data", "1"),                               
+      STATIC_ENTRY("expect-ct", ""),                                 
+      STATIC_ENTRY("forwarded", ""),                                 
+      STATIC_ENTRY("if-range", ""),                                  
+      STATIC_ENTRY("origin", ""),                                    
+      STATIC_ENTRY("purpose", "prefetch"),                           
+      STATIC_ENTRY("server", ""),                                    
+      STATIC_ENTRY("timing-allow-origin", "*"),                      
+      STATIC_ENTRY("upgrade-insecure-requests", "1"),                
+      STATIC_ENTRY("user-agent", ""),                                
+      STATIC_ENTRY("x-forwarded-for", ""),                           
+      STATIC_ENTRY("x-frame-options", "deny"),                       
+      STATIC_ENTRY("x-frame-options", "sameorigin"),                 
+  };
+  return *kQpackStaticTable;
+}
+#undef STATIC_ENTRY
+const QpackStaticTable& ObtainQpackStaticTable() {
+  static const QpackStaticTable* const shared_static_table = []() {
+    auto* table = new QpackStaticTable();
+    table->Initialize(QpackStaticTableVector().data(),
+                      QpackStaticTableVector().size());
+    QUICHE_CHECK(table->IsInitialized());
+    return table;
+  }();
+  return *shared_static_table;
+}
+}  

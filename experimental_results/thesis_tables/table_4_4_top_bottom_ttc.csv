@@ -1,0 +1,11 @@
+function_id,function_name,bva_score,ecp_score,ttc_score
+function_0347,Hash,1.0,1.0,1.0
+function_1887,BuildMessage,1.0,1.0,1.0
+function_1342,CASE_4,0.833,1.0,0.917
+function_2346,GetConvnetDataFormatAttrString,1.0,0.625,0.625
+function_1041,IsValidMetricName,0.667,0.154,0.41
+function_2701,ScopedActivateContext,0.0,0.0,0.0
+function_3389,RuntimeImplFromBuilder,1.0,0.0,0.0
+function_0392,Run,0.0,0.0,0.0
+function_1185,Decode,0.0,0.0,0.0
+function_1820,GetInputBitwidths,0.0,0.0,0.0

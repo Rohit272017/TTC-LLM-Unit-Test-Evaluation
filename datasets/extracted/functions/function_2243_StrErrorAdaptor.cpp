@@ -1,0 +1,58 @@
+#include "absl/base/internal/strerror.h"
+#include <array>
+#include <cerrno>
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <type_traits>
+#include "absl/base/internal/errno_saver.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace base_internal {
+namespace {
+const char* StrErrorAdaptor(int errnum, char* buf, size_t buflen) {
+#if defined(_WIN32)
+  int rc = strerror_s(buf, buflen, errnum);
+  buf[buflen - 1] = '\0';  
+  if (rc == 0 && strncmp(buf, "Unknown error", buflen) == 0) *buf = '\0';
+  return buf;
+#else
+  auto ret = strerror_r(errnum, buf, buflen);
+  if (std::is_same<decltype(ret), int>::value) {
+    if (ret) *buf = '\0';
+    return buf;
+  } else {
+    return reinterpret_cast<const char*>(ret);
+  }
+#endif
+}
+std::string StrErrorInternal(int errnum) {
+  char buf[100];
+  const char* str = StrErrorAdaptor(errnum, buf, sizeof buf);
+  if (*str == '\0') {
+    snprintf(buf, sizeof buf, "Unknown error %d", errnum);
+    str = buf;
+  }
+  return str;
+}
+constexpr int kSysNerr = 135;
+std::array<std::string, kSysNerr>* NewStrErrorTable() {
+  auto* table = new std::array<std::string, kSysNerr>;
+  for (size_t i = 0; i < table->size(); ++i) {
+    (*table)[i] = StrErrorInternal(static_cast<int>(i));
+  }
+  return table;
+}
+}  
+std::string StrError(int errnum) {
+  absl::base_internal::ErrnoSaver errno_saver;
+  static const auto* table = NewStrErrorTable();
+  if (errnum >= 0 && static_cast<size_t>(errnum) < table->size()) {
+    return (*table)[static_cast<size_t>(errnum)];
+  }
+  return StrErrorInternal(errnum);
+}
+}  
+ABSL_NAMESPACE_END
+}  

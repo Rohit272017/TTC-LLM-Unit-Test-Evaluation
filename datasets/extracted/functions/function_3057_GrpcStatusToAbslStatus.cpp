@@ -1,0 +1,46 @@
+#include "tensorstore/internal/grpc/utils.h"
+#include <grpcpp/support/status.h>
+#include <string>
+#include "absl/status/status.h"
+#include "absl/strings/cord.h"
+#include "tensorstore/internal/source_location.h"
+#include "tensorstore/util/status.h"
+#define TENSORSTORE_STATUS_ASSERT(x, y)                  \
+  static_assert(static_cast<int>(grpc::StatusCode::x) == \
+                static_cast<int>(absl::StatusCode::y))
+TENSORSTORE_STATUS_ASSERT(CANCELLED, kCancelled);
+TENSORSTORE_STATUS_ASSERT(UNKNOWN, kUnknown);
+TENSORSTORE_STATUS_ASSERT(INVALID_ARGUMENT, kInvalidArgument);
+TENSORSTORE_STATUS_ASSERT(DEADLINE_EXCEEDED, kDeadlineExceeded);
+TENSORSTORE_STATUS_ASSERT(NOT_FOUND, kNotFound);
+TENSORSTORE_STATUS_ASSERT(ALREADY_EXISTS, kAlreadyExists);
+TENSORSTORE_STATUS_ASSERT(PERMISSION_DENIED, kPermissionDenied);
+TENSORSTORE_STATUS_ASSERT(RESOURCE_EXHAUSTED, kResourceExhausted);
+TENSORSTORE_STATUS_ASSERT(FAILED_PRECONDITION, kFailedPrecondition);
+TENSORSTORE_STATUS_ASSERT(ABORTED, kAborted);
+TENSORSTORE_STATUS_ASSERT(OUT_OF_RANGE, kOutOfRange);
+TENSORSTORE_STATUS_ASSERT(UNIMPLEMENTED, kUnimplemented);
+TENSORSTORE_STATUS_ASSERT(INTERNAL, kInternal);
+TENSORSTORE_STATUS_ASSERT(UNAVAILABLE, kUnavailable);
+TENSORSTORE_STATUS_ASSERT(DATA_LOSS, kDataLoss);
+TENSORSTORE_STATUS_ASSERT(UNAUTHENTICATED, kUnauthenticated);
+#undef TENSORSTORE_STATUS_ASSERT
+namespace tensorstore {
+namespace internal {
+absl::Status GrpcStatusToAbslStatus(grpc::Status s, SourceLocation loc) {
+  if (s.ok()) return absl::OkStatus();
+  auto absl_code = static_cast<absl::StatusCode>(s.error_code());
+  absl::Status status(absl_code, s.error_message());
+  MaybeAddSourceLocation(status, loc);
+  if (!s.error_details().empty()) {
+    status.SetPayload("grpc.Status.details", absl::Cord(s.error_details()));
+  }
+  return status;
+}
+grpc::Status AbslStatusToGrpcStatus(const absl::Status& status) {
+  if (status.ok()) return grpc::Status::OK;
+  auto grpc_code = static_cast<grpc::StatusCode>(status.code());
+  return grpc::Status(grpc_code, std::string(status.message()));
+}
+}  
+}  

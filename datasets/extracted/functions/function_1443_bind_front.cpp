@@ -1,0 +1,23 @@
+#ifndef ABSL_FUNCTIONAL_BIND_FRONT_H_
+#define ABSL_FUNCTIONAL_BIND_FRONT_H_
+#if defined(__cpp_lib_bind_front) && __cpp_lib_bind_front >= 201907L
+#include <functional>  
+#endif  
+#include <utility>
+#include "absl/functional/internal/front_binder.h"
+#include "absl/utility/utility.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+#if defined(__cpp_lib_bind_front) && __cpp_lib_bind_front >= 201907L
+using std::bind_front;
+#else   
+template <class F, class... BoundArgs>
+constexpr functional_internal::bind_front_t<F, BoundArgs...> bind_front(
+    F&& func, BoundArgs&&... args) {
+  return functional_internal::bind_front_t<F, BoundArgs...>(
+      absl::in_place, std::forward<F>(func), std::forward<BoundArgs>(args)...);
+}
+#endif  
+ABSL_NAMESPACE_END
+}  
+#endif  

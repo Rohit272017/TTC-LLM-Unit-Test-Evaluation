@@ -1,0 +1,8 @@
+#include "absl/flags/internal/commandlineflag.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace flags_internal {
+FlagStateInterface::~FlagStateInterface() = default;
+}  
+ABSL_NAMESPACE_END
+}  

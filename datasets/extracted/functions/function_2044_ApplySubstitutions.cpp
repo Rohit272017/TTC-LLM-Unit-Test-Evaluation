@@ -1,0 +1,55 @@
+#include "absl/strings/str_replace.h"
+#include <cstddef>
+#include <initializer_list>
+#include <string>
+#include <utility>
+#include <vector>
+#include "absl/base/config.h"
+#include "absl/base/nullability.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace strings_internal {
+using FixedMapping =
+    std::initializer_list<std::pair<absl::string_view, absl::string_view>>;
+int ApplySubstitutions(
+    absl::string_view s,
+    absl::Nonnull<std::vector<strings_internal::ViableSubstitution>*> subs_ptr,
+    absl::Nonnull<std::string*> result_ptr) {
+  auto& subs = *subs_ptr;
+  int substitutions = 0;
+  size_t pos = 0;
+  while (!subs.empty()) {
+    auto& sub = subs.back();
+    if (sub.offset >= pos) {
+      if (pos <= s.size()) {
+        StrAppend(result_ptr, s.substr(pos, sub.offset - pos), sub.replacement);
+      }
+      pos = sub.offset + sub.old.size();
+      substitutions += 1;
+    }
+    sub.offset = s.find(sub.old, pos);
+    if (sub.offset == s.npos) {
+      subs.pop_back();
+    } else {
+      size_t index = subs.size();
+      while (--index && subs[index - 1].OccursBefore(subs[index])) {
+        std::swap(subs[index], subs[index - 1]);
+      }
+    }
+  }
+  result_ptr->append(s.data() + pos, s.size() - pos);
+  return substitutions;
+}
+}  
+std::string StrReplaceAll(absl::string_view s,
+                          strings_internal::FixedMapping replacements) {
+  return StrReplaceAll<strings_internal::FixedMapping>(s, replacements);
+}
+int StrReplaceAll(strings_internal::FixedMapping replacements,
+                  absl::Nonnull<std::string*> target) {
+  return StrReplaceAll<strings_internal::FixedMapping>(replacements, target);
+}
+ABSL_NAMESPACE_END
+}  

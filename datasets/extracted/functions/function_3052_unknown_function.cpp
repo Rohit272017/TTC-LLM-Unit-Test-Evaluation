@@ -1,0 +1,4 @@
+#ifndef THIRD_PARTY_CEL_CPP_COMMON_VALUES_LEGACY_TYPE_REFLECTOR_H_
+#define THIRD_PARTY_CEL_CPP_COMMON_VALUES_LEGACY_TYPE_REFLECTOR_H_
+#include "common/type_reflector.h"  
+#endif  

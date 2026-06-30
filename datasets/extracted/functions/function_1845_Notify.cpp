@@ -1,0 +1,58 @@
+#include "absl/synchronization/notification.h"
+#include <atomic>
+#include "absl/base/internal/raw_logging.h"
+#include "absl/base/internal/tracing.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+void Notification::Notify() {
+  base_internal::TraceSignal(this, TraceObjectKind());
+  MutexLock l(&this->mutex_);
+#ifndef NDEBUG
+  if (ABSL_PREDICT_FALSE(notified_yet_.load(std::memory_order_relaxed))) {
+    ABSL_RAW_LOG(
+        FATAL,
+        "Notify() method called more than once for Notification object %p",
+        static_cast<void *>(this));
+  }
+#endif
+  notified_yet_.store(true, std::memory_order_release);
+}
+Notification::~Notification() {
+  MutexLock l(&this->mutex_);
+}
+void Notification::WaitForNotification() const {
+  base_internal::TraceWait(this, TraceObjectKind());
+  if (!HasBeenNotifiedInternal(&this->notified_yet_)) {
+    this->mutex_.LockWhen(
+        Condition(&HasBeenNotifiedInternal, &this->notified_yet_));
+    this->mutex_.Unlock();
+  }
+  base_internal::TraceContinue(this, TraceObjectKind());
+}
+bool Notification::WaitForNotificationWithTimeout(
+    absl::Duration timeout) const {
+  base_internal::TraceWait(this, TraceObjectKind());
+  bool notified = HasBeenNotifiedInternal(&this->notified_yet_);
+  if (!notified) {
+    notified = this->mutex_.LockWhenWithTimeout(
+        Condition(&HasBeenNotifiedInternal, &this->notified_yet_), timeout);
+    this->mutex_.Unlock();
+  }
+  base_internal::TraceContinue(notified ? this : nullptr, TraceObjectKind());
+  return notified;
+}
+bool Notification::WaitForNotificationWithDeadline(absl::Time deadline) const {
+  base_internal::TraceWait(this, TraceObjectKind());
+  bool notified = HasBeenNotifiedInternal(&this->notified_yet_);
+  if (!notified) {
+    notified = this->mutex_.LockWhenWithDeadline(
+        Condition(&HasBeenNotifiedInternal, &this->notified_yet_), deadline);
+    this->mutex_.Unlock();
+  }
+  base_internal::TraceContinue(notified ? this : nullptr, TraceObjectKind());
+  return notified;
+}
+ABSL_NAMESPACE_END
+}  

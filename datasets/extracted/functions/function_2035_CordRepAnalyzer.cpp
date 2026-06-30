@@ -1,0 +1,281 @@
+#include "absl/strings/internal/cordz_info.h"
+#include <cstdint>
+#include "absl/base/config.h"
+#include "absl/base/internal/spinlock.h"
+#include "absl/container/inlined_vector.h"
+#include "absl/debugging/stacktrace.h"
+#include "absl/strings/internal/cord_internal.h"
+#include "absl/strings/internal/cord_rep_btree.h"
+#include "absl/strings/internal/cord_rep_crc.h"
+#include "absl/strings/internal/cordz_handle.h"
+#include "absl/strings/internal/cordz_statistics.h"
+#include "absl/strings/internal/cordz_update_tracker.h"
+#include "absl/synchronization/mutex.h"
+#include "absl/time/clock.h"
+#include "absl/types/span.h"
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace cord_internal {
+#ifdef ABSL_INTERNAL_NEED_REDUNDANT_CONSTEXPR_DECL
+constexpr size_t CordzInfo::kMaxStackDepth;
+#endif
+ABSL_CONST_INIT CordzInfo::List CordzInfo::global_list_{absl::kConstInit};
+namespace {
+class CordRepAnalyzer {
+ public:
+  explicit CordRepAnalyzer(CordzStatistics& statistics)
+      : statistics_(statistics) {}
+  void AnalyzeCordRep(const CordRep* rep) {
+    ABSL_ASSERT(rep != nullptr);
+    size_t refcount = rep->refcount.Get();
+    RepRef repref{rep, (refcount > 1) ? refcount - 1 : 1};
+    if (repref.tag() == CRC) {
+      statistics_.node_count++;
+      statistics_.node_counts.crc++;
+      memory_usage_.Add(sizeof(CordRepCrc), repref.refcount);
+      repref = repref.Child(repref.rep->crc()->child);
+    }
+    repref = CountLinearReps(repref, memory_usage_);
+    switch (repref.tag()) {
+      case CordRepKind::BTREE:
+        AnalyzeBtree(repref);
+        break;
+      default:
+        ABSL_ASSERT(repref.tag() == CordRepKind::UNUSED_0);
+        break;
+    }
+    statistics_.estimated_memory_usage += memory_usage_.total;
+    statistics_.estimated_fair_share_memory_usage +=
+        static_cast<size_t>(memory_usage_.fair_share);
+  }
+ private:
+  struct RepRef {
+    const CordRep* rep;
+    size_t refcount;
+    RepRef Child(const CordRep* child) const {
+      if (child == nullptr) return RepRef{nullptr, 0};
+      return RepRef{child, refcount * child->refcount.Get()};
+    }
+    constexpr CordRepKind tag() const {
+      ABSL_ASSERT(rep == nullptr || rep->tag != CordRepKind::UNUSED_0);
+      return rep ? static_cast<CordRepKind>(rep->tag) : CordRepKind::UNUSED_0;
+    }
+  };
+  struct MemoryUsage {
+    size_t total = 0;
+    double fair_share = 0.0;
+    void Add(size_t size, size_t refcount) {
+      total += size;
+      fair_share += static_cast<double>(size) / refcount;
+    }
+  };
+  void CountFlat(size_t size) {
+    statistics_.node_count++;
+    statistics_.node_counts.flat++;
+    if (size <= 64) {
+      statistics_.node_counts.flat_64++;
+    } else if (size <= 128) {
+      statistics_.node_counts.flat_128++;
+    } else if (size <= 256) {
+      statistics_.node_counts.flat_256++;
+    } else if (size <= 512) {
+      statistics_.node_counts.flat_512++;
+    } else if (size <= 1024) {
+      statistics_.node_counts.flat_1k++;
+    }
+  }
+  RepRef CountLinearReps(RepRef rep, MemoryUsage& memory_usage) {
+    while (rep.tag() == SUBSTRING) {
+      statistics_.node_count++;
+      statistics_.node_counts.substring++;
+      memory_usage.Add(sizeof(CordRepSubstring), rep.refcount);
+      rep = rep.Child(rep.rep->substring()->child);
+    }
+    if (rep.tag() >= FLAT) {
+      size_t size = rep.rep->flat()->AllocatedSize();
+      CountFlat(size);
+      memory_usage.Add(size, rep.refcount);
+      return RepRef{nullptr, 0};
+    }
+    if (rep.tag() == EXTERNAL) {
+      statistics_.node_count++;
+      statistics_.node_counts.external++;
+      size_t size = rep.rep->length + sizeof(CordRepExternalImpl<intptr_t>);
+      memory_usage.Add(size, rep.refcount);
+      return RepRef{nullptr, 0};
+    }
+    return rep;
+  }
+  void AnalyzeBtree(RepRef rep) {
+    statistics_.node_count++;
+    statistics_.node_counts.btree++;
+    memory_usage_.Add(sizeof(CordRepBtree), rep.refcount);
+    const CordRepBtree* tree = rep.rep->btree();
+    if (tree->height() > 0) {
+      for (CordRep* edge : tree->Edges()) {
+        AnalyzeBtree(rep.Child(edge));
+      }
+    } else {
+      for (CordRep* edge : tree->Edges()) {
+        CountLinearReps(rep.Child(edge), memory_usage_);
+      }
+    }
+  }
+  CordzStatistics& statistics_;
+  MemoryUsage memory_usage_;
+};
+}  
+CordzInfo* CordzInfo::Head(const CordzSnapshot& snapshot) {
+  ABSL_ASSERT(snapshot.is_snapshot());
+  CordzInfo* head = global_list_.head.load(std::memory_order_acquire);
+  ABSL_ASSERT(snapshot.DiagnosticsHandleIsSafeToInspect(head));
+  return head;
+}
+CordzInfo* CordzInfo::Next(const CordzSnapshot& snapshot) const {
+  ABSL_ASSERT(snapshot.is_snapshot());
+  CordzInfo* next = ci_next_.load(std::memory_order_acquire);
+  ABSL_ASSERT(snapshot.DiagnosticsHandleIsSafeToInspect(this));
+  ABSL_ASSERT(snapshot.DiagnosticsHandleIsSafeToInspect(next));
+  return next;
+}
+void CordzInfo::TrackCord(InlineData& cord, MethodIdentifier method,
+                          int64_t sampling_stride) {
+  assert(cord.is_tree());
+  assert(!cord.is_profiled());
+  CordzInfo* cordz_info =
+      new CordzInfo(cord.as_tree(), nullptr, method, sampling_stride);
+  cord.set_cordz_info(cordz_info);
+  cordz_info->Track();
+}
+void CordzInfo::TrackCord(InlineData& cord, const InlineData& src,
+                          MethodIdentifier method) {
+  assert(cord.is_tree());
+  assert(src.is_tree());
+  CordzInfo* cordz_info = cord.cordz_info();
+  if (cordz_info != nullptr) cordz_info->Untrack();
+  cordz_info = new CordzInfo(cord.as_tree(), src.cordz_info(), method,
+                             src.cordz_info()->sampling_stride());
+  cord.set_cordz_info(cordz_info);
+  cordz_info->Track();
+}
+void CordzInfo::MaybeTrackCordImpl(InlineData& cord, const InlineData& src,
+                                   MethodIdentifier method) {
+  if (src.is_profiled()) {
+    TrackCord(cord, src, method);
+  } else if (cord.is_profiled()) {
+    cord.cordz_info()->Untrack();
+    cord.clear_cordz_info();
+  }
+}
+CordzInfo::MethodIdentifier CordzInfo::GetParentMethod(const CordzInfo* src) {
+  if (src == nullptr) return MethodIdentifier::kUnknown;
+  return src->parent_method_ != MethodIdentifier::kUnknown ? src->parent_method_
+                                                           : src->method_;
+}
+size_t CordzInfo::FillParentStack(const CordzInfo* src, void** stack) {
+  assert(stack);
+  if (src == nullptr) return 0;
+  if (src->parent_stack_depth_) {
+    memcpy(stack, src->parent_stack_, src->parent_stack_depth_ * sizeof(void*));
+    return src->parent_stack_depth_;
+  }
+  memcpy(stack, src->stack_, src->stack_depth_ * sizeof(void*));
+  return src->stack_depth_;
+}
+CordzInfo::CordzInfo(CordRep* rep, const CordzInfo* src,
+                     MethodIdentifier method, int64_t sampling_stride)
+    : rep_(rep),
+      stack_depth_(
+          static_cast<size_t>(absl::GetStackTrace(stack_,
+                                                  kMaxStackDepth,
+                                                  1))),
+      parent_stack_depth_(FillParentStack(src, parent_stack_)),
+      method_(method),
+      parent_method_(GetParentMethod(src)),
+      create_time_(absl::Now()),
+      sampling_stride_(sampling_stride) {
+  update_tracker_.LossyAdd(method);
+  if (src) {
+    update_tracker_.LossyAdd(src->update_tracker_);
+  }
+}
+CordzInfo::~CordzInfo() {
+  if (ABSL_PREDICT_FALSE(rep_)) {
+    CordRep::Unref(rep_);
+  }
+}
+void CordzInfo::Track() {
+  SpinLockHolder l(&list_->mutex);
+  CordzInfo* const head = list_->head.load(std::memory_order_acquire);
+  if (head != nullptr) {
+    head->ci_prev_.store(this, std::memory_order_release);
+  }
+  ci_next_.store(head, std::memory_order_release);
+  list_->head.store(this, std::memory_order_release);
+}
+void CordzInfo::Untrack() {
+  ODRCheck();
+  {
+    SpinLockHolder l(&list_->mutex);
+    CordzInfo* const head = list_->head.load(std::memory_order_acquire);
+    CordzInfo* const next = ci_next_.load(std::memory_order_acquire);
+    CordzInfo* const prev = ci_prev_.load(std::memory_order_acquire);
+    if (next) {
+      ABSL_ASSERT(next->ci_prev_.load(std::memory_order_acquire) == this);
+      next->ci_prev_.store(prev, std::memory_order_release);
+    }
+    if (prev) {
+      ABSL_ASSERT(head != this);
+      ABSL_ASSERT(prev->ci_next_.load(std::memory_order_acquire) == this);
+      prev->ci_next_.store(next, std::memory_order_release);
+    } else {
+      ABSL_ASSERT(head == this);
+      list_->head.store(next, std::memory_order_release);
+    }
+  }
+  if (SafeToDelete()) {
+    UnsafeSetCordRep(nullptr);
+    delete this;
+    return;
+  }
+  {
+    absl::MutexLock lock(&mutex_);
+    if (rep_) CordRep::Ref(rep_);
+  }
+  CordzHandle::Delete(this);
+}
+void CordzInfo::Lock(MethodIdentifier method)
+    ABSL_EXCLUSIVE_LOCK_FUNCTION(mutex_) {
+  mutex_.Lock();
+  update_tracker_.LossyAdd(method);
+  assert(rep_);
+}
+void CordzInfo::Unlock() ABSL_UNLOCK_FUNCTION(mutex_) {
+  bool tracked = rep_ != nullptr;
+  mutex_.Unlock();
+  if (!tracked) {
+    Untrack();
+  }
+}
+absl::Span<void* const> CordzInfo::GetStack() const {
+  return absl::MakeConstSpan(stack_, stack_depth_);
+}
+absl::Span<void* const> CordzInfo::GetParentStack() const {
+  return absl::MakeConstSpan(parent_stack_, parent_stack_depth_);
+}
+CordzStatistics CordzInfo::GetCordzStatistics() const {
+  CordzStatistics stats;
+  stats.method = method_;
+  stats.parent_method = parent_method_;
+  stats.update_tracker = update_tracker_;
+  if (CordRep* rep = RefCordRep()) {
+    stats.size = rep->length;
+    CordRepAnalyzer analyzer(stats);
+    analyzer.AnalyzeCordRep(rep);
+    CordRep::Unref(rep);
+  }
+  return stats;
+}
+}  
+ABSL_NAMESPACE_END
+}  

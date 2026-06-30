@@ -1,0 +1,105 @@
+#include "tensorflow/core/kernels/data/finalize_dataset_op.h"
+#include "tensorflow/core/data/dataset_utils.h"
+#include "tensorflow/core/data/name_utils.h"
+#include "tensorflow/core/framework/dataset.h"
+#include "tensorflow/core/framework/model.h"
+#include "tensorflow/core/framework/partial_tensor_shape.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/kernels/data/experimental/threadpool_dataset_op.h"
+#include "tensorflow/core/kernels/data/model_dataset_op.h"
+#include "tensorflow/core/kernels/data/optimize_dataset_op.h"
+namespace tensorflow {
+namespace data {
+ constexpr const char* const FinalizeDatasetOp::kDatasetType;
+ constexpr const char* const FinalizeDatasetOp::kInputDataset;
+ constexpr const char* const FinalizeDatasetOp::kOutputTypes;
+ constexpr const char* const FinalizeDatasetOp::kOutputShapes;
+ constexpr const char* const FinalizeDatasetOp::kHasCapturedRef;
+namespace {
+void GetModelDatasetParams(const Options& options,
+                           model::AutotuneAlgorithm* algorithm,
+                           int64_t* cpu_budget, int64_t* ram_budget) {
+  *algorithm = model::AutotuneAlgorithm::HILL_CLIMB;
+  *cpu_budget = options.autotune_options().cpu_budget();
+  *ram_budget = options.autotune_options().ram_budget();
+}
+void MakeDatasetHelper(OpKernelContext* ctx, bool has_captured_ref,
+                       DatasetBase* input, DatasetBase** output) {
+  *output = input;
+  input->Ref();
+  const Options& options = input->options();
+  if (ShouldConfigureMaxIntraOpParallelism(options)) {
+    experimental::MaxIntraOpParallelismDatasetOp::MakeDatasetFromOptions(
+        ctx, input, options.threading_options().max_intra_op_parallelism(),
+        output);
+    input->Unref();
+    input = *output;
+  }
+  if (ShouldUsePrivateThreadPool(options)) {
+    experimental::PrivateThreadPoolDatasetOp::MakeDatasetFromOptions(
+        ctx, input, options.threading_options().private_threadpool_size(),
+        output);
+    input->Unref();
+    input = *output;
+  }
+  if (ShouldUseAutotuning(options)) {
+    model::AutotuneAlgorithm algorithm;
+    int64_t cpu_budget;
+    int64_t ram_budget;
+    GetModelDatasetParams(options, &algorithm, &cpu_budget, &ram_budget);
+    ModelDatasetOp::MakeDatasetFromOptions(ctx, input, algorithm, cpu_budget,
+                                           ram_budget, output);
+    input->Unref();
+    input = *output;
+  }
+  absl::flat_hash_set<tstring> optimizations_enabled;
+  absl::flat_hash_set<tstring> optimizations_disabled;
+  absl::flat_hash_set<tstring> optimizations_default;
+  GetOptimizations(options, &optimizations_enabled, &optimizations_disabled,
+                   &optimizations_default);
+  if (ShouldApplyOptimizations(options, optimizations_enabled,
+                               optimizations_default)) {
+    if (has_captured_ref &&
+        (!optimizations_enabled.empty() || !optimizations_default.empty())) {
+      LOG(WARNING)
+          << "tf.data graph rewrites are not compatible with reference "
+             "variables. The following rewrites will be disabled: "
+          << absl::StrJoin(optimizations_enabled, ", ") << ", "
+          << absl::StrJoin(optimizations_default, ", ") << ". "
+          << "To enable rewrites, use resource variables instead by calling "
+             "`tf.enable_resource_variables()` at the start of the program.";
+    } else {
+      auto optimization_configs = CreateGraphRewriteConfigs(options);
+      OptimizeDatasetOp::MakeDatasetFromOptions(
+          ctx, input, optimizations_enabled, optimizations_disabled,
+          optimizations_default, optimization_configs, output);
+      input->Unref();
+      input = *output;
+    }
+  }
+}
+}  
+FinalizeDatasetOp::FinalizeDatasetOp(OpKernelConstruction* ctx)
+    : UnaryDatasetOpKernel(ctx) {
+  if (ctx->HasAttr(kHasCapturedRef)) {
+    OP_REQUIRES_OK(ctx, ctx->GetAttr(kHasCapturedRef, &has_captured_ref_));
+  } else {
+    has_captured_ref_ = false;
+  }
+}
+void FinalizeDatasetOp::MakeDataset(OpKernelContext* ctx, DatasetBase* input,
+                                    DatasetBase** output) {
+  MakeDatasetHelper(ctx, has_captured_ref_, input, output);
+}
+namespace {
+REGISTER_KERNEL_BUILDER(Name("FinalizeDataset").Device(DEVICE_CPU).Priority(2),
+                        FinalizeDatasetOp);
+REGISTER_KERNEL_BUILDER(Name("FinalizeDataset")
+                            .Device(DEVICE_GPU)
+                            .HostMemory("input_dataset")
+                            .HostMemory("handle")
+                            .Priority(1),
+                        FinalizeDatasetNoopOp);
+}  
+}  
+}  

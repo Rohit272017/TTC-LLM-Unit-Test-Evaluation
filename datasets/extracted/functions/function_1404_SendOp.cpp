@@ -1,0 +1,60 @@
+#include "tensorflow/compiler/tf2xla/shape_util.h"
+#include "tensorflow/compiler/tf2xla/xla_compiler.h"
+#include "tensorflow/compiler/tf2xla/xla_op_kernel.h"
+#include "tensorflow/compiler/tf2xla/xla_op_registry.h"
+#include "xla/hlo/builder/xla_builder.h"
+#include "xla/shape.h"
+#include "xla/xla_data.pb.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/op_requires.h"
+#include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/framework/types.pb.h"
+#include "tensorflow/core/platform/types.h"
+namespace tensorflow {
+namespace {
+class SendOp : public XlaOpKernel {
+ public:
+  explicit SendOp(OpKernelConstruction* ctx);
+  void Compile(XlaOpKernelContext* ctx) override;
+ private:
+  string tensor_name_;
+  SendOp(const SendOp&) = delete;
+  void operator=(const SendOp&) = delete;
+};
+SendOp::SendOp(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {
+  OP_REQUIRES_OK(ctx, ctx->GetAttr("tensor_name", &tensor_name_));
+}
+void SendOp::Compile(XlaOpKernelContext* ctx) {
+  XlaCompiler* compiler = ctx->compiler();
+  xla::ChannelHandle channel;
+  OP_REQUIRES_OK(ctx, compiler->GetChannelHandle(tensor_name_, &channel));
+  xla::Send(ctx->Input(0), channel);
+}
+REGISTER_XLA_OP(Name("XlaSend"), SendOp);
+class RecvOp : public XlaOpKernel {
+ public:
+  explicit RecvOp(OpKernelConstruction* ctx);
+  void Compile(XlaOpKernelContext* ctx) override;
+ private:
+  string tensor_name_;
+  xla::Shape shape_;
+  RecvOp(const RecvOp&) = delete;
+  void operator=(const RecvOp&) = delete;
+};
+RecvOp::RecvOp(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {
+  OP_REQUIRES_OK(ctx, ctx->GetAttr("tensor_name", &tensor_name_));
+  TensorShape tensor_shape;
+  DataType dtype;
+  OP_REQUIRES_OK(ctx, ctx->GetAttr("shape", &tensor_shape));
+  OP_REQUIRES_OK(ctx, ctx->GetAttr("dtype", &dtype));
+  OP_REQUIRES_OK(ctx, TensorShapeToXLAShape(dtype, tensor_shape, &shape_));
+}
+void RecvOp::Compile(XlaOpKernelContext* ctx) {
+  XlaCompiler* compiler = ctx->compiler();
+  xla::ChannelHandle channel;
+  OP_REQUIRES_OK(ctx, compiler->GetChannelHandle(tensor_name_, &channel));
+  ctx->SetOutput(0, xla::Recv(ctx->builder(), shape_, channel));
+}
+REGISTER_XLA_OP(Name("XlaRecv"), RecvOp);
+}  
+}  

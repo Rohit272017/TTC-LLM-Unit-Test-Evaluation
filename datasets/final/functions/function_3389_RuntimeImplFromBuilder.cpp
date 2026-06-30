@@ -1,0 +1,51 @@
+#include "runtime/reference_resolver.h"
+#include "absl/base/macros.h"
+#include "absl/log/absl_log.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "common/native_type.h"
+#include "eval/compiler/qualified_reference_resolver.h"
+#include "internal/casts.h"
+#include "internal/status_macros.h"
+#include "runtime/internal/runtime_friend_access.h"
+#include "runtime/internal/runtime_impl.h"
+#include "runtime/runtime.h"
+#include "runtime/runtime_builder.h"
+namespace cel {
+namespace {
+using ::cel::internal::down_cast;
+using ::cel::runtime_internal::RuntimeFriendAccess;
+using ::cel::runtime_internal::RuntimeImpl;
+absl::StatusOr<RuntimeImpl*> RuntimeImplFromBuilder(RuntimeBuilder& builder) {
+  Runtime& runtime = RuntimeFriendAccess::GetMutableRuntime(builder);
+  if (RuntimeFriendAccess::RuntimeTypeId(runtime) !=
+      NativeTypeId::For<RuntimeImpl>()) {
+    return absl::UnimplementedError(
+        "regex precompilation only supported on the default cel::Runtime "
+        "implementation.");
+  }
+  RuntimeImpl& runtime_impl = down_cast<RuntimeImpl&>(runtime);
+  return &runtime_impl;
+}
+google::api::expr::runtime::ReferenceResolverOption Convert(
+    ReferenceResolverEnabled enabled) {
+  switch (enabled) {
+    case ReferenceResolverEnabled::kCheckedExpressionOnly:
+      return google::api::expr::runtime::ReferenceResolverOption::kCheckedOnly;
+    case ReferenceResolverEnabled::kAlways:
+      return google::api::expr::runtime::ReferenceResolverOption::kAlways;
+  }
+  ABSL_LOG(FATAL) << "unsupported ReferenceResolverEnabled enumerator: "
+                  << static_cast<int>(enabled);
+}
+}  
+absl::Status EnableReferenceResolver(RuntimeBuilder& builder,
+                                     ReferenceResolverEnabled enabled) {
+  CEL_ASSIGN_OR_RETURN(RuntimeImpl * runtime_impl,
+                       RuntimeImplFromBuilder(builder));
+  ABSL_ASSERT(runtime_impl != nullptr);
+  runtime_impl->expr_builder().AddAstTransform(
+      NewReferenceResolverExtension(Convert(enabled)));
+  return absl::OkStatus();
+}
+}  

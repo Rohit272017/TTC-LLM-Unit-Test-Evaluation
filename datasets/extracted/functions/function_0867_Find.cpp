@@ -1,0 +1,324 @@
+#ifndef ABSL_CONTAINER_INTERNAL_LAYOUT_H_
+#define ABSL_CONTAINER_INTERNAL_LAYOUT_H_
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <array>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <typeinfo>
+#include <utility>
+#include "absl/base/attributes.h"
+#include "absl/base/config.h"
+#include "absl/debugging/internal/demangle.h"
+#include "absl/meta/type_traits.h"
+#include "absl/strings/str_cat.h"
+#include "absl/types/span.h"
+#include "absl/utility/utility.h"
+#ifdef ABSL_HAVE_ADDRESS_SANITIZER
+#include <sanitizer/asan_interface.h>
+#endif
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace container_internal {
+template <class T, size_t N>
+struct Aligned;
+namespace internal_layout {
+template <class T>
+struct NotAligned {};
+template <class T, size_t N>
+struct NotAligned<const Aligned<T, N>> {
+  static_assert(sizeof(T) == 0, "Aligned<T, N> cannot be const-qualified");
+};
+template <size_t>
+using IntToSize = size_t;
+template <class T>
+struct Type : NotAligned<T> {
+  using type = T;
+};
+template <class T, size_t N>
+struct Type<Aligned<T, N>> {
+  using type = T;
+};
+template <class T>
+struct SizeOf : NotAligned<T>, std::integral_constant<size_t, sizeof(T)> {};
+template <class T, size_t N>
+struct SizeOf<Aligned<T, N>> : std::integral_constant<size_t, sizeof(T)> {};
+template <class T>
+struct AlignOf : NotAligned<T> {
+  static constexpr size_t value = alignof(T);
+};
+template <class T, size_t N>
+struct AlignOf<Aligned<T, N>> {
+  static_assert(N % alignof(T) == 0,
+                "Custom alignment can't be lower than the type's alignment");
+  static constexpr size_t value = N;
+};
+template <class T, class... Ts>
+using Contains = absl::disjunction<std::is_same<T, Ts>...>;
+template <class From, class To>
+using CopyConst =
+    typename std::conditional<std::is_const<From>::value, const To, To>::type;
+template <class T>
+using SliceType = Span<T>;
+namespace adl_barrier {
+template <class Needle, class... Ts>
+constexpr size_t Find(Needle, Needle, Ts...) {
+  static_assert(!Contains<Needle, Ts...>(), "Duplicate element type");
+  return 0;
+}
+template <class Needle, class T, class... Ts>
+constexpr size_t Find(Needle, T, Ts...) {
+  return adl_barrier::Find(Needle(), Ts()...) + 1;
+}
+constexpr bool IsPow2(size_t n) { return !(n & (n - 1)); }
+constexpr size_t Align(size_t n, size_t m) { return (n + m - 1) & ~(m - 1); }
+constexpr size_t Min(size_t a, size_t b) { return b < a ? b : a; }
+constexpr size_t Max(size_t a) { return a; }
+template <class... Ts>
+constexpr size_t Max(size_t a, size_t b, Ts... rest) {
+  return adl_barrier::Max(b < a ? a : b, rest...);
+}
+template <class T>
+std::string TypeName() {
+  std::string out;
+#if ABSL_INTERNAL_HAS_RTTI
+  absl::StrAppend(&out, "<",
+                  absl::debugging_internal::DemangleString(typeid(T).name()),
+                  ">");
+#endif
+  return out;
+}
+}  
+template <bool C>
+using EnableIf = typename std::enable_if<C, int>::type;
+template <class T>
+using IsLegalElementType = std::integral_constant<
+    bool, !std::is_reference<T>::value && !std::is_volatile<T>::value &&
+              !std::is_reference<typename Type<T>::type>::value &&
+              !std::is_volatile<typename Type<T>::type>::value &&
+              adl_barrier::IsPow2(AlignOf<T>::value)>;
+template <class Elements, class StaticSizeSeq, class RuntimeSizeSeq,
+          class SizeSeq, class OffsetSeq>
+class LayoutImpl;
+template <class... Elements, size_t... StaticSizeSeq, size_t... RuntimeSizeSeq,
+          size_t... SizeSeq, size_t... OffsetSeq>
+class LayoutImpl<
+    std::tuple<Elements...>, absl::index_sequence<StaticSizeSeq...>,
+    absl::index_sequence<RuntimeSizeSeq...>, absl::index_sequence<SizeSeq...>,
+    absl::index_sequence<OffsetSeq...>> {
+ private:
+  static_assert(sizeof...(Elements) > 0, "At least one field is required");
+  static_assert(absl::conjunction<IsLegalElementType<Elements>...>::value,
+                "Invalid element type (see IsLegalElementType)");
+  static_assert(sizeof...(StaticSizeSeq) <= sizeof...(Elements),
+                "Too many static sizes specified");
+  enum {
+    NumTypes = sizeof...(Elements),
+    NumStaticSizes = sizeof...(StaticSizeSeq),
+    NumRuntimeSizes = sizeof...(RuntimeSizeSeq),
+    NumSizes = sizeof...(SizeSeq),
+    NumOffsets = sizeof...(OffsetSeq),
+  };
+  static_assert(NumStaticSizes + NumRuntimeSizes == NumSizes, "Internal error");
+  static_assert(NumSizes <= NumTypes, "Internal error");
+  static_assert(NumOffsets == adl_barrier::Min(NumTypes, NumSizes + 1),
+                "Internal error");
+  static_assert(NumTypes > 0, "Internal error");
+  static constexpr std::array<size_t, sizeof...(StaticSizeSeq)> kStaticSizes = {
+      StaticSizeSeq...};
+  template <class T>
+  static constexpr size_t ElementIndex() {
+    static_assert(Contains<Type<T>, Type<typename Type<Elements>::type>...>(),
+                  "Type not found");
+    return adl_barrier::Find(Type<T>(),
+                             Type<typename Type<Elements>::type>()...);
+  }
+  template <size_t N>
+  using ElementAlignment =
+      AlignOf<typename std::tuple_element<N, std::tuple<Elements...>>::type>;
+ public:
+  using ElementTypes = std::tuple<typename Type<Elements>::type...>;
+  template <size_t N>
+  using ElementType = typename std::tuple_element<N, ElementTypes>::type;
+  constexpr explicit LayoutImpl(IntToSize<RuntimeSizeSeq>... sizes)
+      : size_{sizes...} {}
+  static constexpr size_t Alignment() {
+    return adl_barrier::Max(AlignOf<Elements>::value...);
+  }
+  template <size_t N, EnableIf<N == 0> = 0>
+  constexpr size_t Offset() const {
+    return 0;
+  }
+  template <size_t N, EnableIf<N != 0> = 0>
+  constexpr size_t Offset() const {
+    static_assert(N < NumOffsets, "Index out of bounds");
+    return adl_barrier::Align(
+        Offset<N - 1>() + SizeOf<ElementType<N - 1>>::value * Size<N - 1>(),
+        ElementAlignment<N>::value);
+  }
+  template <class T>
+  constexpr size_t Offset() const {
+    return Offset<ElementIndex<T>()>();
+  }
+  constexpr std::array<size_t, NumOffsets> Offsets() const {
+    return {{Offset<OffsetSeq>()...}};
+  }
+  template <size_t N, EnableIf<(N < NumStaticSizes)> = 0>
+  constexpr size_t Size() const {
+    return kStaticSizes[N];
+  }
+  template <size_t N, EnableIf<(N >= NumStaticSizes)> = 0>
+  constexpr size_t Size() const {
+    static_assert(N < NumSizes, "Index out of bounds");
+    return size_[N - NumStaticSizes];
+  }
+  template <class T>
+  constexpr size_t Size() const {
+    return Size<ElementIndex<T>()>();
+  }
+  constexpr std::array<size_t, NumSizes> Sizes() const {
+    return {{Size<SizeSeq>()...}};
+  }
+  template <size_t N, class Char>
+  CopyConst<Char, ElementType<N>>* Pointer(Char* p) const {
+    using C = typename std::remove_const<Char>::type;
+    static_assert(
+        std::is_same<C, char>() || std::is_same<C, unsigned char>() ||
+            std::is_same<C, signed char>(),
+        "The argument must be a pointer to [const] [signed|unsigned] char");
+    constexpr size_t alignment = Alignment();
+    (void)alignment;
+    assert(reinterpret_cast<uintptr_t>(p) % alignment == 0);
+    return reinterpret_cast<CopyConst<Char, ElementType<N>>*>(p + Offset<N>());
+  }
+  template <class T, class Char>
+  CopyConst<Char, T>* Pointer(Char* p) const {
+    return Pointer<ElementIndex<T>()>(p);
+  }
+  template <class Char>
+  auto Pointers(Char* p) const {
+    return std::tuple<CopyConst<Char, ElementType<OffsetSeq>>*...>(
+        Pointer<OffsetSeq>(p)...);
+  }
+  template <size_t N, class Char>
+  SliceType<CopyConst<Char, ElementType<N>>> Slice(Char* p) const {
+    return SliceType<CopyConst<Char, ElementType<N>>>(Pointer<N>(p), Size<N>());
+  }
+  template <class T, class Char>
+  SliceType<CopyConst<Char, T>> Slice(Char* p) const {
+    return Slice<ElementIndex<T>()>(p);
+  }
+  template <class Char>
+  auto Slices(ABSL_ATTRIBUTE_UNUSED Char* p) const {
+    return std::tuple<SliceType<CopyConst<Char, ElementType<SizeSeq>>>...>(
+        Slice<SizeSeq>(p)...);
+  }
+  constexpr size_t AllocSize() const {
+    static_assert(NumTypes == NumSizes, "You must specify sizes of all fields");
+    return Offset<NumTypes - 1>() +
+           SizeOf<ElementType<NumTypes - 1>>::value * Size<NumTypes - 1>();
+  }
+  template <class Char, size_t N = NumOffsets - 1, EnableIf<N == 0> = 0>
+  void PoisonPadding(const Char* p) const {
+    Pointer<0>(p);  
+  }
+  template <class Char, size_t N = NumOffsets - 1, EnableIf<N != 0> = 0>
+  void PoisonPadding(const Char* p) const {
+    static_assert(N < NumOffsets, "Index out of bounds");
+    (void)p;
+#ifdef ABSL_HAVE_ADDRESS_SANITIZER
+    PoisonPadding<Char, N - 1>(p);
+    if (ElementAlignment<N - 1>::value % ElementAlignment<N>::value) {
+      size_t start =
+          Offset<N - 1>() + SizeOf<ElementType<N - 1>>::value * Size<N - 1>();
+      ASAN_POISON_MEMORY_REGION(p + start, Offset<N>() - start);
+    }
+#endif
+  }
+  std::string DebugString() const {
+    const auto offsets = Offsets();
+    const size_t sizes[] = {SizeOf<ElementType<OffsetSeq>>::value...};
+    const std::string types[] = {
+        adl_barrier::TypeName<ElementType<OffsetSeq>>()...};
+    std::string res = absl::StrCat("@0", types[0], "(", sizes[0], ")");
+    for (size_t i = 0; i != NumOffsets - 1; ++i) {
+      absl::StrAppend(&res, "[", DebugSize(i), "]; @", offsets[i + 1],
+                      types[i + 1], "(", sizes[i + 1], ")");
+    }
+    int last = static_cast<int>(NumSizes) - 1;
+    if (NumTypes == NumSizes && last >= 0) {
+      absl::StrAppend(&res, "[", DebugSize(static_cast<size_t>(last)), "]");
+    }
+    return res;
+  }
+ private:
+  size_t DebugSize(size_t n) const {
+    if (n < NumStaticSizes) {
+      return kStaticSizes[n];
+    } else {
+      return size_[n - NumStaticSizes];
+    }
+  }
+  size_t size_[NumRuntimeSizes > 0 ? NumRuntimeSizes : 1];
+};
+template <class... Elements, size_t... StaticSizeSeq, size_t... RuntimeSizeSeq,
+          size_t... SizeSeq, size_t... OffsetSeq>
+constexpr std::array<size_t, sizeof...(StaticSizeSeq)> LayoutImpl<
+    std::tuple<Elements...>, absl::index_sequence<StaticSizeSeq...>,
+    absl::index_sequence<RuntimeSizeSeq...>, absl::index_sequence<SizeSeq...>,
+    absl::index_sequence<OffsetSeq...>>::kStaticSizes;
+template <class StaticSizeSeq, size_t NumRuntimeSizes, class... Ts>
+using LayoutType = LayoutImpl<
+    std::tuple<Ts...>, StaticSizeSeq,
+    absl::make_index_sequence<NumRuntimeSizes>,
+    absl::make_index_sequence<NumRuntimeSizes + StaticSizeSeq::size()>,
+    absl::make_index_sequence<adl_barrier::Min(
+        sizeof...(Ts), NumRuntimeSizes + StaticSizeSeq::size() + 1)>>;
+template <class StaticSizeSeq, class... Ts>
+class LayoutWithStaticSizes
+    : public LayoutType<StaticSizeSeq,
+                        sizeof...(Ts) - adl_barrier::Min(sizeof...(Ts),
+                                                         StaticSizeSeq::size()),
+                        Ts...> {
+ private:
+  using Super =
+      LayoutType<StaticSizeSeq,
+                 sizeof...(Ts) -
+                     adl_barrier::Min(sizeof...(Ts), StaticSizeSeq::size()),
+                 Ts...>;
+ public:
+  template <size_t NumSizes>
+  using PartialType =
+      internal_layout::LayoutType<StaticSizeSeq, NumSizes, Ts...>;
+  template <class... Sizes>
+  static constexpr PartialType<sizeof...(Sizes)> Partial(Sizes&&... sizes) {
+    static_assert(sizeof...(Sizes) + StaticSizeSeq::size() <= sizeof...(Ts),
+                  "");
+    return PartialType<sizeof...(Sizes)>(
+        static_cast<size_t>(std::forward<Sizes>(sizes))...);
+  }
+  using Super::Super;
+};
+}  
+template <class... Ts>
+class Layout : public internal_layout::LayoutWithStaticSizes<
+                   absl::make_index_sequence<0>, Ts...> {
+ private:
+  using Super =
+      internal_layout::LayoutWithStaticSizes<absl::make_index_sequence<0>,
+                                             Ts...>;
+ public:
+  template <class StaticSizeSeq>
+  using WithStaticSizeSequence =
+      internal_layout::LayoutWithStaticSizes<StaticSizeSeq, Ts...>;
+  template <size_t... StaticSizes>
+  using WithStaticSizes =
+      WithStaticSizeSequence<std::index_sequence<StaticSizes...>>;
+  using Super::Super;
+};
+}  
+ABSL_NAMESPACE_END
+}  
+#endif  

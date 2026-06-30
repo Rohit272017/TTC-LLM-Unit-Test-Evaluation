@@ -1,0 +1,449 @@
+function_id,function_name,test_file,compile_success,error
+function_0347,Hash,generated_tests/gpt55/function_0347_Hash_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0347_Hash_gpt_test.cpp:1:10: fatal error: util/hash.h: No such file or directory
+    1 | #include ""util/hash.h""
+      |          ^~~~~~~~~~~~~
+compilation terminated.
+"
+function_1887,BuildMessage,generated_tests/gpt55/function_1887_BuildMessage_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1887_BuildMessage_gpt_test.cpp:1:10: fatal error: tensorflow/c/logging.h: No such file or directory
+    1 | #include ""tensorflow/c/logging.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1342,CASE_4,generated_tests/gpt55/function_1342_CASE_4_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1342_CASE_4_gpt_test.cpp:1:10: fatal error: arolla/util/switch_index.h: No such file or directory
+    1 | #include ""arolla/util/switch_index.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0704,FNMatch,generated_tests/gpt55/function_0704_FNMatch_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0704_FNMatch_gpt_test.cpp:1:10: fatal error: absl/log/internal/fnmatch.h: No such file or directory
+    1 | #include ""absl/log/internal/fnmatch.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1041,IsValidMetricName,generated_tests/gpt55/function_1041_IsValidMetricName_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1041_IsValidMetricName_gpt_test.cpp:1:10: fatal error: tensorstore/internal/metrics/metadata.h: No such file or directory
+    1 | #include ""tensorstore/internal/metrics/metadata.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0060,BrainPadding2EigenPadding,generated_tests/gpt55/function_0060_BrainPadding2EigenPadding_gpt_test.cpp,False,"In file included from ./tensorflow/core/platform/logging.h:19,
+                 from ./tensorflow/core/platform/status.h:21,
+                 from ./tensorflow/core/lib/core/status.h:19,
+                 from ./tensorflow/core/util/padding.h:25,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0060_BrainPadding2EigenPadding_gpt_test.cpp:1:
+./tensorflow/core/platform/types.h:23:10: fatal error: xla/tsl/platform/types.h: No such file or directory
+   23 | #include ""xla/tsl/platform/types.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2701,ScopedActivateContext,generated_tests/gpt55/function_2701_ScopedActivateContext_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2701_ScopedActivateContext_gpt_test.cpp:1:10: fatal error: xla/stream_executor/gpu/scoped_activate_context.h: No such file or directory
+    1 | #include ""xla/stream_executor/gpu/scoped_activate_context.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0751,NgHttp2Session,generated_tests/gpt55/function_0751_NgHttp2Session_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0751_NgHttp2Session_gpt_test.cpp:1:10: fatal error: quiche/http2/adapter/nghttp2_session.h: No such file or directory
+    1 | #include ""quiche/http2/adapter/nghttp2_session.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2476,Display,generated_tests/gpt55/function_2476_Display_gpt_test.cpp,False,"In file included from ./tensorflow/core/profiler/internal/tfprof_tensor.h:33,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2476_Display_gpt_test.cpp:1:
+./tensorflow/core/framework/tensor.h:26:10: fatal error: unsupported/Eigen/CXX11/Tensor: No such file or directory
+   26 | #include ""unsupported/Eigen/CXX11/Tensor""  // from @eigen_archive
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0392,Run,generated_tests/gpt55/function_0392_Run_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0392_Run_gpt_test.cpp:1:10: fatal error: xla/service/collectives_schedule_linearizer.h: No such file or directory
+    1 | #include ""xla/service/collectives_schedule_linearizer.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2439,Tokenize,generated_tests/gpt55/function_2439_Tokenize_gpt_test.cpp,True,
+function_3389,RuntimeImplFromBuilder,generated_tests/gpt55/function_3389_RuntimeImplFromBuilder_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_3389_RuntimeImplFromBuilder_gpt_test.cpp:1:10: fatal error: runtime/reference_resolver.h: No such file or directory
+    1 | #include ""runtime/reference_resolver.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1820,GetInputBitwidths,generated_tests/gpt55/function_1820_GetInputBitwidths_gpt_test.cpp,False,"In file included from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1820_GetInputBitwidths_gpt_test.cpp:1:
+./tensorflow/core/profiler/utils/xprof_gpu_cost_analysis.h:19:10: fatal error: xprof/utils/xprof_gpu_cost_analysis.h: No such file or directory
+   19 | #include ""xprof/utils/xprof_gpu_cost_analysis.h""  // from @org_xprof  // IWYU pragma: export
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1185,Decode,generated_tests/gpt55/function_1185_Decode_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1185_Decode_gpt_test.cpp:1:10: fatal error: quiche/http2/hpack/decoder/hpack_block_decoder.h: No such file or directory
+    1 | #include ""quiche/http2/hpack/decoder/hpack_block_decoder.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1681,QuicSocketAddressCoder,generated_tests/gpt55/function_1681_QuicSocketAddressCoder_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1681_QuicSocketAddressCoder_gpt_test.cpp:1:10: fatal error: quiche/quic/core/quic_socket_address_coder.h: No such file or directory
+    1 | #include ""quiche/quic/core/quic_socket_address_coder.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1963,EvaluateAffineExpr,generated_tests/gpt55/function_1963_EvaluateAffineExpr_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1963_EvaluateAffineExpr_gpt_test.cpp:1:10: fatal error: xla/service/gpu/model/affine_map_evaluator.h: No such file or directory
+    1 | #include ""xla/service/gpu/model/affine_map_evaluator.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2461,FindInlineBlock,generated_tests/gpt55/function_2461_FindInlineBlock_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2461_FindInlineBlock_gpt_test.cpp: In member function ‘virtual void tflite::gpu::gl::{anonymous}::TextPreprocessorTest_ECP_SingleKnownInlineBlockIsRewritten_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2461_FindInlineBlock_gpt_test.cpp:105:36: error: cannot convert ‘std::remove_reference<std::unique_ptr<tflite::gpu::gl::{anonymous}::FakeInlineRewrite, std::default_delete<tflite::gpu::gl::{anonymous}::FakeInlineRewrite> >&>::type’ {aka ‘std::unique_ptr<tflite::gpu::gl::{anonymous}::FakeInlineRewrite, std::default_delete<tflite::gpu::gl::{anonymous}::FakeInlineRewrite> >’} to ‘tflite::gpu::gl::InlineRewrite*’
+  105 |   preprocessor.AddRewrite(std::move(rewrite));
+      |                           ~~~~~~~~~^~~~~~~~~
+      |                                    |
+      |                                    std::remove_reference<std::unique_ptr<tflite::gpu::gl::{anonymous}::FakeInlineRewrite, std::default_delete<tflite::gpu::gl::{anonymous}::FakeInlineRewrite> >&>::type {aka std::unique_ptr<tflite::gpu::gl::{anonymous}::FakeInlineRewrite, std::default_delete<tflite::gpu::gl::{anonymous}::FakeInlineRewrite> >}
+In file included from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2461_FindInlineBlock_gpt_test.cpp:1:
+./tensorflow/lite/delegates/gpu/gl/compiler/preprocessor.h:56:34: note:   initializing argument 1 of ‘void tflite::gpu::gl::TextPreprocessor::AddRewrite(tflite::gpu::gl::InlineRewrite*)’
+   56 |   void AddRewrite(InlineRewrite* rewrite) {
+      |                   ~~~~~~~~~~~~~~~^~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2461_FindInlineBlock_gpt_test.cpp: In member function ‘virtual void tflite::gpu::gl::{anonymous}::TextPreprocessorTest_ECP_MultipleKnownInlineBlocksAreRewritten_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2461_FindInlineBlock_gpt_test.cpp:118:62: error: cannot convert ‘std::_MakeUniq<tflite::gpu::gl::{anonymous}::FakeInlineRewrite>::__single_object’ {aka ‘std::unique_ptr<tflite::gpu::gl::{anonymous}::FakeInlineRewrite, std::default_delete<tflite::gpu::gl::{anonymous}::FakeInlineRewrite> >’} to ‘tflite::gpu::gl::InlineRewrite*’
+  118 |   preprocessor.AddRewrite(std::make_unique<FakeInlineRewrite>(
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+      |                                                              |
+      |                                                              std::_MakeUniq<tflite::gpu::gl::{anonymous}::FakeInlineRewrite>::__single_object {aka std::unique_ptr<tflite::gpu::gl::{anonymous}::FakeInlineRewrite, std::default_delete<tflite::gpu::gl::{anonymous}::FakeInlineRewrite> >}
+  119 |       ""A"", RewriteStatus::SUCCESS, ""one""));
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                     
+In file included from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2461_FindInlineBlock_gpt_test.cpp:1:
+./ten"
+function_2905,QuicAlarm,generated_tests/gpt55/function_2905_QuicAlarm_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2905_QuicAlarm_gpt_test.cpp:1:10: fatal error: quiche/quic/core/quic_alarm.h: No such file or directory
+    1 | #include ""quiche/quic/core/quic_alarm.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_3163,FusionKindToString,generated_tests/gpt55/function_3163_FusionKindToString_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_3163_FusionKindToString_gpt_test.cpp:1:10: fatal error: xla/service/gpu/transforms/rename_fusions.h: No such file or directory
+    1 | #include ""xla/service/gpu/transforms/rename_fusions.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1903,PointwiseUnaryOpPrepare,generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::sign::{anonymous}::SignCustomOpTest_ECP_PrepareWithFloat32MatchingTypesCopiesInputShape_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp:100:25: error: ‘PointwiseUnaryOpPrepare’ was not declared in this scope
+  100 |   TfLiteStatus status = PointwiseUnaryOpPrepare(&context_, &node_);
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::sign::{anonymous}::SignCustomOpTest_ECP_PrepareWithFloat64MatchingTypesCopiesInputShape_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp:116:25: error: ‘PointwiseUnaryOpPrepare’ was not declared in this scope
+  116 |   TfLiteStatus status = PointwiseUnaryOpPrepare(&context_, &node_);
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::sign::{anonymous}::SignCustomOpTest_BVA_PrepareScalarInputCopiesZeroRankShape_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp:131:25: error: ‘PointwiseUnaryOpPrepare’ was not declared in this scope
+  131 |   TfLiteStatus status = PointwiseUnaryOpPrepare(&context_, &node_);
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::sign::{anonymous}::SignCustomOpTest_BVA_PrepareZeroElementTensorCopiesShape_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp:145:25: error: ‘PointwiseUnaryOpPrepare’ was not declared in this scope
+  145 |   TfLiteStatus status = PointwiseUnaryOpPrepare(&context_, &node_);
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~
+In file included from /usr/include/gtest/gtest.h:387,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp:3:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::sign::{anonymous}::SignCustomOpTest_Invalid_PrepareFailsWhenInputCountIsNotOne_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1903_PointwiseUnaryOpPrepare_gpt_test.cpp:166:13: error: ‘PointwiseUnaryOpPrepare’ was not declared in this scope
+  166 |   EXPECT_EQ(PointwiseUnaryOpPrepare(&context_, &node_), kTfLiteError);
+      |             ^~~~~~~~~~~~~~~~~~~~~~~
+/home/how"
+function_0181,QpackEncoderStreamReceiver,generated_tests/gpt55/function_0181_QpackEncoderStreamReceiver_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0181_QpackEncoderStreamReceiver_gpt_test.cpp:1:10: fatal error: quiche/quic/core/qpack/qpack_encoder_stream_receiver.h: No such file or directory
+    1 | #include ""quiche/quic/core/qpack/qpack_encoder_stream_receiver.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2346,GetConvnetDataFormatAttrString,generated_tests/gpt55/function_2346_GetConvnetDataFormatAttrString_gpt_test.cpp,False,"In file included from ./tensorflow/core/util/tensor_format.h:24,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2346_GetConvnetDataFormatAttrString_gpt_test.cpp:1:
+./tensorflow/core/framework/tensor.h:26:10: fatal error: unsupported/Eigen/CXX11/Tensor: No such file or directory
+   26 | #include ""unsupported/Eigen/CXX11/Tensor""  // from @eigen_archive
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1391,GetNumSubtractionSubBoxes,generated_tests/gpt55/function_1391_GetNumSubtractionSubBoxes_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1391_GetNumSubtractionSubBoxes_gpt_test.cpp:1:10: fatal error: tensorstore/internal/box_difference.h: No such file or directory
+    1 | #include ""tensorstore/internal/box_difference.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_3119,WritableFileRawStream,generated_tests/gpt55/function_3119_WritableFileRawStream_gpt_test.cpp,False,"In file included from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_3119_WritableFileRawStream_gpt_test.cpp:1:
+./tensorflow/compiler/mlir/tensorflow/utils/dump_graph.h:21:10: fatal error: mlir/IR/OperationSupport.h: No such file or directory
+   21 | #include ""mlir/IR/OperationSupport.h""  // from @llvm-project
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0089,operator,generated_tests/gpt55/function_0089_operator_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0089_operator_gpt_test.cpp:1:10: fatal error: eval/public/cel_attribute.h: No such file or directory
+    1 | #include ""eval/public/cel_attribute.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2715,if,generated_tests/gpt55/function_2715_if_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2715_if_gpt_test.cpp:1:10: fatal error: quiche/quic/moqt/moqt_subscribe_windows.h: No such file or directory
+    1 | #include ""quiche/quic/moqt/moqt_subscribe_windows.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0067,JsonEscape,generated_tests/gpt55/function_0067_JsonEscape_gpt_test.cpp,False,"In file included from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0067_JsonEscape_gpt_test.cpp:1:
+./tensorflow/core/profiler/convert/trace_viewer/trace_events_to_json.h:18:10: fatal error: xprof/convert/trace_viewer/trace_events_to_json.h: No such file or directory
+   18 | #include ""xprof/convert/trace_viewer/trace_events_to_json.h""  // from @org_xprof  // IWYU pragma: export
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2790,FastBinarySearchT,generated_tests/gpt55/function_2790_FastBinarySearchT_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2790_FastBinarySearchT_gpt_test.cpp:1:10: fatal error: arolla/util/binary_search.h: No such file or directory
+    1 | #include ""arolla/util/binary_search.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0045,JsonSame,generated_tests/gpt55/function_0045_JsonSame_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0045_JsonSame_gpt_test.cpp:1:10: fatal error: tensorstore/internal/json/same.h: No such file or directory
+    1 | #include ""tensorstore/internal/json/same.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2729,Init,generated_tests/gpt55/function_2729_Init_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2729_Init_gpt_test.cpp:1:10: fatal error: tensorstore/internal/compression/zlib.h: No such file or directory
+    1 | #include ""tensorstore/internal/compression/zlib.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2866,IsUpcastConvert,generated_tests/gpt55/function_2866_IsUpcastConvert_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2866_IsUpcastConvert_gpt_test.cpp:1:10: fatal error: xla/service/convert_operand_folding.h: No such file or directory
+    1 | #include ""xla/service/convert_operand_folding.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1339,IsConstZeros,generated_tests/gpt55/function_1339_IsConstZeros_gpt_test.cpp,False,"In file included from ./tensorflow/lite/delegates/gpu/common/tensor.h:25,
+                 from ./tensorflow/lite/delegates/gpu/common/model.h:33,
+                 from ./tensorflow/lite/delegates/gpu/common/model_transformer.h:25,
+                 from ./tensorflow/lite/delegates/gpu/common/transformations/make_padding.h:21,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1339_IsConstZeros_gpt_test.cpp:1:
+./tensorflow/lite/delegates/gpu/common/types.h:23:10: fatal error: fp16.h: No such file or directory
+   23 | #include ""fp16.h""  // from @FP16
+      |          ^~~~~~~~
+compilation terminated.
+"
+function_1718,Variant,generated_tests/gpt55/function_1718_Variant_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp: In function ‘tflite::interop::Variant tflite::interop::{anonymous}::MakeInvalid()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp:14:12: error: ‘kInvalid’ was not declared in this scope; did you mean ‘MakeInvalid’?
+   14 |   v.type = kInvalid;
+      |            ^~~~~~~~
+      |            MakeInvalid
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp: In function ‘tflite::interop::Variant tflite::interop::{anonymous}::MakeInt(int)’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp:21:12: error: ‘kInt’ was not declared in this scope
+   21 |   v.type = kInt;
+      |            ^~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp: In function ‘tflite::interop::Variant tflite::interop::{anonymous}::MakeSizeT(size_t)’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp:28:12: error: ‘kSizeT’ was not declared in this scope; did you mean ‘MakeSizeT’?
+   28 |   v.type = kSizeT;
+      |            ^~~~~~
+      |            MakeSizeT
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp: In function ‘tflite::interop::Variant tflite::interop::{anonymous}::MakeString(const char*)’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp:35:12: error: ‘kString’ was not declared in this scope; did you mean ‘MakeString’?
+   35 |   v.type = kString;
+      |            ^~~~~~~
+      |            MakeString
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp: In function ‘tflite::interop::Variant tflite::interop::{anonymous}::MakeBool(bool)’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp:42:12: error: ‘kBool’ was not declared in this scope
+   42 |   v.type = kBool;
+      |            ^~~~~
+In file included from /usr/include/gtest/gtest.h:387,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp:3:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp: In member function ‘virtual void tflite::interop::{anonymous}::VariantTest_DefaultConstructorCreatesInvalidVariantWithZeroValue_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1718_Variant_gpt_test.cpp:50:21: error: ‘kInvalid’ was not declared in this scope; did you mean ‘MakeInvalid’?
+   50 |   EXPECT_EQ(v.type, kInvalid);
+      |                     ^~~~~~~~
+"
+function_1968,ToTensorflowAlgorithm,generated_tests/gpt55/function_1968_ToTensorflowAlgorithm_gpt_test.cpp,False,"In file included from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1968_ToTensorflowAlgorithm_gpt_test.cpp:1:
+./tensorflow/compiler/tf2xla/kernels/rng_converter_utils.h:20:10: fatal error: xla/xla_data.pb.h: No such file or directory
+   20 | #include ""xla/xla_data.pb.h""
+      |          ^~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2425,operator_,generated_tests/gpt55/function_2425_operator__gpt_test.cpp,False,"In file included from /usr/include/gtest/gtest.h:387,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp:3:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp: In member function ‘virtual void absl::debian2::{anonymous}::LogSeverityAtLeastStreamTest_ECP_ValidThresholdsPrintGreaterThanOrEqualPrefix_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp:55:34: error: ‘absl::LogSeverityAtLeast’ has not been declared
+   55 |   EXPECT_EQ(StreamToString(absl::LogSeverityAtLeast::kInfo), "">=INFO"");
+      |                                  ^~~~~~~~~~~~~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp:56:34: error: ‘absl::LogSeverityAtLeast’ has not been declared
+   56 |   EXPECT_EQ(StreamToString(absl::LogSeverityAtLeast::kWarning), "">=WARNING"");
+      |                                  ^~~~~~~~~~~~~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp:57:34: error: ‘absl::LogSeverityAtLeast’ has not been declared
+   57 |   EXPECT_EQ(StreamToString(absl::LogSeverityAtLeast::kError), "">=ERROR"");
+      |                                  ^~~~~~~~~~~~~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp:58:34: error: ‘absl::LogSeverityAtLeast’ has not been declared
+   58 |   EXPECT_EQ(StreamToString(absl::LogSeverityAtLeast::kFatal), "">=FATAL"");
+      |                                  ^~~~~~~~~~~~~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp: In member function ‘virtual void absl::debian2::{anonymous}::LogSeverityAtLeastStreamTest_ECP_InfinityPrintsInfinity_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp:62:34: error: ‘absl::LogSeverityAtLeast’ has not been declared
+   62 |   EXPECT_EQ(StreamToString(absl::LogSeverityAtLeast::kInfinity), ""INFINITY"");
+      |                                  ^~~~~~~~~~~~~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp: In member function ‘virtual void absl::debian2::{anonymous}::LogSeverityAtLeastStreamTest_BVA_LowestFiniteThresholdPrintsInfo_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp:66:46: error: ‘LogSeverityAtLeast’ in namespace ‘absl’ does not name a type
+   66 |   EXPECT_EQ(StreamToString(static_cast<absl::LogSeverityAtLeast>(0)),
+      |                                              ^~~~~~~~~~~~~~~~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp: In member function ‘virtual void absl::debian2::{anonymous}::LogSeverityAtLeastStreamTest_BVA_HighestFiniteThresholdPrintsFatal_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2425_operator__gpt_test.cpp:71:46: error: ‘Log"
+function_2914,StringLikeSpan,generated_tests/gpt55/function_2914_StringLikeSpan_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2914_StringLikeSpan_gpt_test.cpp:1:10: fatal error: tensorstore/internal/string_like.h: No such file or directory
+    1 | #include ""tensorstore/internal/string_like.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0010,CopyState,generated_tests/gpt55/function_0010_CopyState_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0010_CopyState_gpt_test.cpp:1:10: fatal error: leveldb/status.h: No such file or directory
+    1 | #include ""leveldb/status.h""
+      |          ^~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2065,HloOpcodeString,generated_tests/gpt55/function_2065_HloOpcodeString_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2065_HloOpcodeString_gpt_test.cpp:1:10: fatal error: xla/hlo/ir/hlo_opcode.h: No such file or directory
+    1 | #include ""xla/hlo/ir/hlo_opcode.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_3110,operator_,generated_tests/gpt55/function_3110_operator__gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_3110_operator__gpt_test.cpp:1:10: fatal error: common/memory.h: No such file or directory
+    1 | #include ""common/memory.h""
+      |          ^~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0833,NcclBase,generated_tests/gpt55/function_0833_NcclBase_gpt_test.cpp,False,"In file included from ./tensorflow/core/framework/collective.h:22,
+                 from ./tensorflow/core/kernels/collective_nccl.h:18,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0833_NcclBase_gpt_test.cpp:1:
+./tensorflow/core/framework/cancellation.h:19:10: fatal error: xla/tsl/framework/cancellation.h: No such file or directory
+   19 | #include ""xla/tsl/framework/cancellation.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1298,to_string,generated_tests/gpt55/function_1298_to_string_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1298_to_string_gpt_test.cpp:1:10: fatal error: tensorstore/open_mode.h: No such file or directory
+    1 | #include ""tensorstore/open_mode.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0480,MaybeInferShape,generated_tests/gpt55/function_0480_MaybeInferShape_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0480_MaybeInferShape_gpt_test.cpp:1:10: fatal error: xla/service/result_caster.h: No such file or directory
+    1 | #include ""xla/service/result_caster.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0737,PrefetchAutotuner,generated_tests/gpt55/function_0737_PrefetchAutotuner_gpt_test.cpp,False,"In file included from ./tensorflow/core/framework/model.h:35,
+                 from ./tensorflow/core/kernels/data/prefetch_autotuner.h:23,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0737_PrefetchAutotuner_gpt_test.cpp:1:
+./tensorflow/core/framework/cancellation.h:19:10: fatal error: xla/tsl/framework/cancellation.h: No such file or directory
+   19 | #include ""xla/tsl/framework/cancellation.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0656,TfTensorView,generated_tests/gpt55/function_0656_TfTensorView_gpt_test.cpp,False,"In file included from ./tensorflow/lite/kernels/shim/tf_tensor_view.h:22,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0656_TfTensorView_gpt_test.cpp:1:
+./tensorflow/core/framework/tensor.h:26:10: fatal error: unsupported/Eigen/CXX11/Tensor: No such file or directory
+   26 | #include ""unsupported/Eigen/CXX11/Tensor""  // from @eigen_archive
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1907,ParsedJsonValue,generated_tests/gpt55/function_1907_ParsedJsonValue_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1907_ParsedJsonValue_gpt_test.cpp:1:10: fatal error: common/values/parsed_json_value.h: No such file or directory
+    1 | #include ""common/values/parsed_json_value.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1222,convertToValidationFailureType,generated_tests/gpt55/function_1222_convertToValidationFailureType_gpt_test.cpp,False,"In file included from ./tensorflow/lite/core/model_builder.h:33,
+                 from ./tensorflow/lite/model_builder.h:20,
+                 from ./tensorflow/lite/tools/delegates/compatibility/gpu/gpu_delegate_compatibility_checker.h:23,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1222_convertToValidationFailureType_gpt_test.cpp:1:
+./tensorflow/compiler/mlir/lite/core/model_builder_base.h:39:10: fatal error: flatbuffers/base.h: No such file or directory
+   39 | #include ""flatbuffers/base.h""  // from @flatbuffers
+      |          ^~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0131,IsWellKnownMessageType,generated_tests/gpt55/function_0131_IsWellKnownMessageType_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0131_IsWellKnownMessageType_gpt_test.cpp:1:10: fatal error: common/type.h: No such file or directory
+    1 | #include ""common/type.h""
+      |          ^~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2406,CreateDcnMessageFromStats,generated_tests/gpt55/function_2406_CreateDcnMessageFromStats_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2406_CreateDcnMessageFromStats_gpt_test.cpp:1:10: fatal error: tensorflow/core/profiler/convert/dcn_utils.h: No such file or directory
+    1 | #include ""tensorflow/core/profiler/convert/dcn_utils.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1255,Prepare,generated_tests/gpt55/function_1255_Prepare_gpt_test.cpp,False,"In file included from ./tensorflow/lite/kernels/internal/reference/integer_ops/lut.h:18,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1255_Prepare_gpt_test.cpp:2:
+./tensorflow/lite/kernels/internal/common.h:33:10: fatal error: fixedpoint/fixedpoint.h: No such file or directory
+   33 | #include ""fixedpoint/fixedpoint.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_0640,GetCurrentHloPassMetadata,generated_tests/gpt55/function_0640_GetCurrentHloPassMetadata_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0640_GetCurrentHloPassMetadata_gpt_test.cpp:1:10: fatal error: xla/hlo/ir/hlo_module_metadata.h: No such file or directory
+    1 | #include ""xla/hlo/ir/hlo_module_metadata.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2264,RandomStandardNormalSample,generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::random_standard_normal::{anonymous}::RandomStandardNormalTest::SetUp()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp:69:23: error: ‘Init’ was not declared in this scope
+   69 |     node_.user_data = Init(&context_, nullptr, 0);
+      |                       ^~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::random_standard_normal::{anonymous}::RandomStandardNormalTest::TearDown()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp:73:5: error: ‘Free’ was not declared in this scope; did you mean ‘free’?
+   73 |     Free(&context_, node_.user_data);
+      |     ^~~~
+      |     free
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::random_standard_normal::{anonymous}::RandomStandardNormalTest_InitReturnsNonNullOpData_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp:105:16: error: ‘Init’ was not declared in this scope
+  105 |   void* data = Init(&context_, nullptr, 0);
+      |                ^~~~
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp:109:3: error: ‘Free’ was not declared in this scope; did you mean ‘free’?
+  109 |   Free(&context_, data);
+      |   ^~~~
+      |   free
+In file included from /usr/include/gtest/gtest.h:62,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp:3:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::random_standard_normal::{anonymous}::RandomStandardNormalTest_FreeAcceptsNullBuffer_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp:113:27: error: ‘Free’ was not declared in this scope; did you mean ‘free’?
+  113 |   EXPECT_NO_FATAL_FAILURE(Free(&context_, nullptr));
+      |                           ^~~~
+In file included from /usr/include/gtest/gtest.h:387,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp:3:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardNormalSample_gpt_test.cpp: In member function ‘virtual void tflite::ops::custom::random_standard_normal::{anonymous}::RandomStandardNormalTest_ECP_PrepareConstantShapeResizesFloat32Output_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2264_RandomStandardN"
+function_0141,switch,generated_tests/gpt55/function_0141_switch_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0141_switch_gpt_test.cpp:1:10: fatal error: xla/service/gpu/gpu_float_support.h: No such file or directory
+    1 | #include ""xla/service/gpu/gpu_float_support.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2390,IsInOrderArch,generated_tests/gpt55/function_2390_IsInOrderArch_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2390_IsInOrderArch_gpt_test.cpp:8:10: fatal error: include/cpuinfo.h: No such file or directory
+    8 | #include ""include/cpuinfo.h""
+      |          ^~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1053,Run,generated_tests/gpt55/function_1053_Run_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1053_Run_gpt_test.cpp:1:10: fatal error: xla/service/dynamic_index_splitter.h: No such file or directory
+    1 | #include ""xla/service/dynamic_index_splitter.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2955,IsAllowedS4U4CustomCall,generated_tests/gpt55/function_2955_IsAllowedS4U4CustomCall_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2955_IsAllowedS4U4CustomCall_gpt_test.cpp:1:10: fatal error: xla/service/cpu_gpu_shape_verifier.h: No such file or directory
+    1 | #include ""xla/service/cpu_gpu_shape_verifier.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2678,ConsumeUnboundConversionNoInline,generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp: In member function ‘virtual void absl::debian2::str_format_internal::{anonymous}::StrFormatParserTest_ECP_ConsumeUnboundConversionParsesIntegerConversion_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp:37:7: error: ‘ConsumeUnboundConversionNoInline’ was not declared in this scope; did you mean ‘ConsumeUnboundConversion’?
+   37 |       ConsumeUnboundConversionNoInline(begin + 1, end, &conv, &next_arg);
+      |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |       ConsumeUnboundConversion
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp: In member function ‘virtual void absl::debian2::str_format_internal::{anonymous}::StrFormatParserTest_ECP_ConsumeUnboundConversionParsesStringConversion_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp:51:7: error: ‘ConsumeUnboundConversionNoInline’ was not declared in this scope; did you mean ‘ConsumeUnboundConversion’?
+   51 |       ConsumeUnboundConversionNoInline(begin + 1, end, &conv, &next_arg);
+      |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |       ConsumeUnboundConversion
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp: In member function ‘virtual void absl::debian2::str_format_internal::{anonymous}::StrFormatParserTest_ECP_ConsumeUnboundConversionParsesFloatConversion_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp:65:7: error: ‘ConsumeUnboundConversionNoInline’ was not declared in this scope; did you mean ‘ConsumeUnboundConversion’?
+   65 |       ConsumeUnboundConversionNoInline(begin + 1, end, &conv, &next_arg);
+      |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |       ConsumeUnboundConversion
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp: In member function ‘virtual void absl::debian2::str_format_internal::{anonymous}::StrFormatParserTest_ECP_ConsumeUnboundConversionParsesExplicitArgPosition_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp:79:7: error: ‘ConsumeUnboundConversionNoInline’ was not declared in this scope; did you mean ‘ConsumeUnboundConversion’?
+   79 |       ConsumeUnboundConversionNoInline(begin + 1, end, &conv, &next_arg);
+      |       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |       ConsumeUnboundConversion
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2678_ConsumeUnboundConversionNoInline_gpt_test.cpp: In member function ‘virtual void absl::debian2::str_format_internal::{anonymous}::StrFormatParserTest_BVA_ConsumeUnboundConversionParsesFirstArgPosit"
+function_0476,ROTL,generated_tests/gpt55/function_0476_ROTL_gpt_test.cpp,False,"In file included from ./tensorflow/core/kernels/random_index_shuffle.h:21,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_0476_ROTL_gpt_test.cpp:1:
+./tensorflow/core/platform/types.h:23:10: fatal error: xla/tsl/platform/types.h: No such file or directory
+   23 | #include ""xla/tsl/platform/types.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_2446,CalculateBase64EscapedLenInternal,generated_tests/gpt55/function_2446_CalculateBase64EscapedLenInternal_gpt_test.cpp,False,"In file included from /usr/include/gtest/gtest.h:387,
+                 from /home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2446_CalculateBase64EscapedLenInternal_gpt_test.cpp:3:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2446_CalculateBase64EscapedLenInternal_gpt_test.cpp: In member function ‘virtual void absl::debian2::strings_internal::{anonymous}::Base64EscapingInternalTest_ECP_EncodeWebSafeAlphabetUsesDashAndUnderscore_Test::TestBody()’:
+/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2446_CalculateBase64EscapedLenInternal_gpt_test.cpp:138:33: error: ‘kWebSafeBase64Chars’ was not declared in this scope; did you mean ‘kBase64Chars’?
+  138 |   EXPECT_EQ(EncodeBase64(input, kWebSafeBase64Chars, true), ""-___"");
+      |                                 ^~~~~~~~~~~~~~~~~~~
+"
+function_2825,operator_,generated_tests/gpt55/function_2825_operator__gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_2825_operator__gpt_test.cpp:1:10: fatal error: arolla/expr/expr_node.h: No such file or directory
+    1 | #include ""arolla/expr/expr_node.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
+function_1536,SplitNameAndMetadata,generated_tests/gpt55/function_1536_SplitNameAndMetadata_gpt_test.cpp,False,"/home/how1kor/sandbox/Thesis/generated_tests/gpt55/function_1536_SplitNameAndMetadata_gpt_test.cpp:1:10: fatal error: xla/tsl/profiler/utils/parse_annotation.h: No such file or directory
+    1 | #include ""xla/tsl/profiler/utils/parse_annotation.h""
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+"
